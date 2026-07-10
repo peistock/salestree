@@ -1,0 +1,95 @@
+# SearXNG 配置 — FamilyMind 国内引擎专用
+# 基于默认配置覆盖，只保留国内可用源
+# 注意：不使用代理，直接使用宿主机家庭宽带出口 IP
+
+use_default_settings: true
+
+search:
+  safe_search: 0
+  autocomplete: "baidu"
+  formats:
+    - html
+    - json
+  language: "zh"
+
+general:
+  debug: false
+  instance_name: "FamilyMind Search"
+
+ui:
+  static_path: ""
+  templates_path: ""
+  default_theme: simple
+
+server:
+  bind_address: "0.0.0.0"
+  port: 8080
+  secret_key: "familymind-searxng-key-2026-change-me"
+  limiter: false
+  image_proxy: false
+
+outgoing:
+  request_timeout: 15.0
+  max_request_timeout: 20.0
+  useragent_suffix: ""
+  enable_http2: false
+
+engines:
+  - name: baidu
+    engine: baidu
+    shortcut: bd
+    disabled: false
+    timeout: 12.0
+
+  - name: sogou
+    engine: sogou
+    shortcut: sg
+    disabled: false
+    timeout: 12.0
+
+  - name: 360search
+    engine: 360search
+    shortcut: 360so
+    disabled: false
+    timeout: 12.0
+
+  - name: bing news
+    engine: bing_news
+    shortcut: bin
+    disabled: true
+    timeout: 12.0
+
+  - name: google news
+    engine: google_news
+    shortcut: gn
+    disabled: false
+    timeout: 15.0
+
+  - name: sogou wechat
+    engine: sogou_wechat
+    shortcut: sgw
+    disabled: false
+    timeout: 12.0
+
+# 显式禁用常见国外引擎（防止默认配置里启用）
+  - name: google
+    engine: google
+    disabled: true
+  - name: duckduckgo
+    engine: duckduckgo
+    disabled: true
+  - name: startpage
+    engine: startpage
+    disabled: true
+  - name: qwant
+    engine: qwant
+    disabled: true
+  - name: wikipedia
+    engine: wikipedia
+    disabled: true
+  - name: brave
+    engine: brave
+    disabled: true
+  - name: mojeek
+    engine: mojeek
+    disabled: true

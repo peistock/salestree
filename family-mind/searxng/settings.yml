@@ -1,0 +1,129 @@
+# SearXNG 配置 — FamilyMind 国内引擎专用
+# 基于默认配置覆盖，只保留国内可用源
+
+use_default_settings: true
+
+search:
+  safe_search: 2
+  autocomplete: "baidu"
+  formats:
+    - html
+    - json
+  language: "zh"
+
+general:
+  debug: false
+  instance_name: "FamilyMind Search"
+
+ui:
+  static_path: ""
+  templates_path: ""
+  default_theme: simple
+
+server:
+  bind_address: "0.0.0.0"
+  port: 8080
+  secret_key: "familymind-searxng-key-2026-change-me"
+  limiter: false
+  image_proxy: false
+
+redis:
+  url: redis://127.0.0.1:6379/0
+
+outgoing:
+  request_timeout: 10.0
+  max_request_timeout: 15.0
+  useragent_suffix: ""
+  enable_http2: false
+
+# 引擎配置：通用搜索 + 新闻搜索 + 微信搜索
+engines:
+  # ── 通用搜索 ──
+  - name: baidu
+    engine: baidu
+    shortcut: bd
+    disabled: false
+    timeout: 8.0
+
+  - name: bing
+    engine: bing
+    shortcut: bi
+    disabled: true
+    timeout: 10.0
+
+  - name: 360search
+    engine: 360search
+    shortcut: 360so
+    disabled: false
+    timeout: 8.0
+
+  - name: sogou
+    engine: sogou
+    shortcut: sg
+    disabled: false
+    timeout: 10.0
+
+  # ── 新闻搜索（时事查询核心） ──
+  # 注意：SearXNG 引擎 name 不能包含下划线，用空格分隔
+  - name: bing news
+    engine: bing_news
+    shortcut: bin
+    disabled: true
+    timeout: 10.0
+
+  - name: google news
+    engine: google_news
+    shortcut: gn
+    disabled: false
+    timeout: 12.0
+
+  - name: sogou wechat
+    engine: sogou_wechat
+    shortcut: sgw
+    disabled: false
+    timeout: 10.0
+
+  # ── 知识/视频（按需启用） ──
+  - name: zhihu
+    engine: zhihu
+    shortcut: zh
+    disabled: false
+    timeout: 8.0
+
+  - name: 中国搜索
+    engine: chinaso
+    shortcut: cs
+    disabled: false
+    inactive: false
+    timeout: 10.0
+    chinaso_category: news
+    chinaso_news_source: all
+
+  - name: bilibili
+    engine: bilibili
+    shortcut: bil
+    disabled: true
+    timeout: 8.0
+
+# 显式禁用常见国外引擎（防止默认配置里启用）
+  - name: google
+    engine: google
+    disabled: true
+  - name: duckduckgo
+    engine: duckduckgo
+    disabled: true
+  - name: startpage
+    engine: startpage
+    disabled: true
+  - name: qwant
+    engine: qwant
+    disabled: true
+  - name: wikipedia
+    engine: wikipedia
+    disabled: true
+  - name: brave
+    engine: brave
+    disabled: true
+  - name: mojeek
+    engine: mojeek
+    disabled: true
