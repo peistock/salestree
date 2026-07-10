@@ -14,7 +14,7 @@ from mind.companion_routines import morning_routine, noon_routine, evening_routi
 
 logger = logging.getLogger(__name__)
 
-DB_URL = f"postgresql://{os.getenv('DB_USER', 'family')}:{os.getenv('DB_PASSWORD', 'familymind2026')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'familymind')}"
+DB_URL = f"postgresql://{os.getenv('DB_USER', 'family')}:{os.getenv('DB_PASSWORD', 'salesmind2026')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'salesmind')}"
 
 scheduler = BackgroundScheduler(
     jobstores={"default": SQLAlchemyJobStore(url=DB_URL)}

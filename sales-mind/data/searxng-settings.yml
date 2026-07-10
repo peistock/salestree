@@ -1,4 +1,4 @@
-# SearXNG 配置 — FamilyMind 国内引擎专用
+# SearXNG 配置 — SalesMind 国内引擎专用
 # 基于默认配置覆盖，只保留国内可用源
 # 注意：不使用代理，直接使用宿主机家庭宽带出口 IP
 
@@ -14,7 +14,7 @@ search:
 
 general:
   debug: false
-  instance_name: "FamilyMind Search"
+  instance_name: "SalesMind Search"
 
 ui:
   static_path: ""
@@ -24,7 +24,7 @@ ui:
 server:
   bind_address: "0.0.0.0"
   port: 8080
-  secret_key: "familymind-searxng-key-2026-change-me"
+  secret_key: "salesmind-searxng-key-2026-change-me"
   limiter: false
   image_proxy: false
 

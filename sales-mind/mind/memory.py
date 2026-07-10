@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_USER = os.getenv("DB_USER", "family")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "familymind2026")
-DB_NAME = os.getenv("DB_NAME", "familymind")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "salesmind2026")
+DB_NAME = os.getenv("DB_NAME", "salesmind")
 
 MODEL_SUMMARY = os.getenv("MODEL_SUMMARY", "gemma-4-26b-a4b-it-ud")
 

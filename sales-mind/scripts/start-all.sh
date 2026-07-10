@@ -1,10 +1,10 @@
 #!/bin/bash
-# FamilyMind 一键启动（Docker + Cloudflare Tunnel）
+# SalesMind 一键启动（Docker + Cloudflare Tunnel）
 # 运行方式: bash scripts/start-all.sh
 
 set -e
 
-echo "=== FamilyMind 启动 ==="
+echo "=== SalesMind 启动 ==="
 
 # 1. 启动 Docker 服务
 echo "启动 PostgreSQL + App..."
@@ -26,7 +26,7 @@ for i in {1..30}; do
 done
 
 # 3. 检查隧道配置
-TUNNEL_NAME="family-mind"
+TUNNEL_NAME="sales-mind"
 CONFIG_DIR="$HOME/.cloudflared"
 
 if [ ! -f "$CONFIG_DIR/${TUNNEL_NAME}.json" ]; then

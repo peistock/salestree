@@ -4,10 +4,10 @@
 
 set -e
 
-TUNNEL_NAME="family-mind"
+TUNNEL_NAME="sales-mind"
 CONFIG_DIR="$HOME/.cloudflared"
 
-echo "=== FamilyMind Cloudflare Tunnel 配置 ==="
+echo "=== SalesMind Cloudflare Tunnel 配置 ==="
 
 # 1. 检查 cloudflared
 if ! command -v cloudflared &> /dev/null; then

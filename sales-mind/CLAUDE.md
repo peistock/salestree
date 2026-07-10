@@ -1,10 +1,10 @@
 ---
 name: 销销 架构纲领
-description: B2B 销售 AI 助手「销销」的项目上下文、架构哲学与开发指南（已从 FamilyMind 家庭场景 pivot）
+description: B2B 销售 AI 助手「销销」的项目上下文、架构哲学与开发指南（已从 原 FamilyMind 家庭场景 pivot）
 type: project
 ---
 
-> **⚠️ 项目转向说明**：本项目已从 FamilyMind（家庭数字孪生）彻底 pivot 为 **销销 — B2B 销售智能协作空间**，服务对象为互联网广告/营销公司的销售团队。以下文档中保留的家庭/老人相关内容均为历史归档，当前实现、数据库表、系统提示词和技能库以销售场景为准。新增开发请以销销的销售助手定位为准。
+> **⚠️ 项目转向说明**：本项目已从 原 FamilyMind（家庭数字孪生）彻底 pivot 为 **销销 — B2B 销售智能协作空间**，服务对象为互联网广告/营销公司的销售团队。以下文档中保留的家庭/老人相关内容均为历史归档，当前实现、数据库表、系统提示词和技能库以销售场景为准。新增开发请以销销的销售助手定位为准。
 
 # 销销 — B2B 销售智能协作空间
 
@@ -28,7 +28,7 @@ type: project
 | **Mac 服务器** | 服务运行在爸爸的 Mac 上，7×24 小时开机 | Mac 合盖/断电/网络波动会导致服务中断 |
 | **混合部署** | 服务器运行销销主应用（FastAPI + PostgreSQL + 云 LLM）；SearXNG 保留在本地 Mac，通过 Cloudflare Tunnel `searxng.peistock.win` 暴露 | 云端机房 IP 易被搜索引擎反爬虫拦截；本地 Mac 断网时服务器搜索降级为 Chrome 百度搜索 fallback。`.env` 中 `SEARXNG_URL` 控制指向本地还是远程域名 |
 | **本地 LLM 为主** | 核心智能依赖 **LM Studio 本地 qwen/qwen3.6-35b-a3b**（端口 1234）；DeepSeek v4-flash / 百炼 qwen3.6-plus 作为 API 备选（`.env` 中切换 BASE_URL 即可） | 本地 35B 模型日常任务稳定，复杂任务（万字报告）输出质量可达 ~3500 字；API 费用 ¥0/月；不受网络波动影响；thinking mode 不可用 |
-| **Docker PostgreSQL** | PG 容器通过端口映射暴露 localhost:5432 | 本地其他 PostgreSQL 实例（如 pg0）可能抢占 5432 端口，导致 FamilyMind 连接到错误数据库并报密码认证失败。启动前必须检查 `lsof -i :5432` |
+| **Docker PostgreSQL** | PG 容器通过端口映射暴露 localhost:5432 | 本地其他 PostgreSQL 实例（如 pg0）可能抢占 5432 端口，导致 SalesMind 连接到错误数据库并报密码认证失败。启动前必须检查 `lsof -i :5432` |
 | **本地隐私优先** | 敏感数据（病历）本地处理；上下文压缩走本地 Gemma 4 26B | 本地模型能力持续升级（qwen3.5-35b-a3b 已可胜任主模型），医疗相关回答质量可接受 |
 | **夫妻录入** | 用药/日程等数据由夫妻手动录入，非老人主动维护 | 数据更新摩擦高，长期可能因懒惰而数据过时 |
 
@@ -209,7 +209,7 @@ output:
 
 Claude Code 的 `/btw` 在家庭场景的映射：
 
-| Claude Code | FamilyMind |
+| Claude Code | SalesMind |
 |------------|-----------|
 | 边执行代码边插入新指令 | 老人在 Agent 查药时，插嘴问"昨天血压多少" |
 | 原任务挂起，新任务优先 | Agent 暂停查药，先回答血压，然后续上"刚才的药查好了…" |
@@ -348,7 +348,7 @@ Agent 收到后，立即在下一次交互中优先关切呼吸状况。
 - [x] **AgentMessage / Message 分层**：应用层 `AgentMessage` dataclass，LLM API 边界处 `to_llm()` 转换，支持未来扩展（annotations/attachments 等）
 - [x] **Services / Session 分离**：`AgentServices` 基础设施层（LLM 等全局复用）+ `AgentSession` 状态层（消息/待办/目录），FamilyAgent 保留为向后兼容别名
 - [x] **并行工具执行**：`PARALLEL_SAFE_TOOLS` 白名单（fetch/jina/find_chrome/read/list/get_time 等无状态工具），通过 ThreadPoolExecutor 并行执行，网页获取类任务延迟从累加变取最大
-- [x] **pi-mono 架构融合**：核心运行时参考 pi-mono（badlogic/pi-mono）的分层设计，循环模式保留 Hermes 风格，形成 "pi-mono 骨架 + Hermes 循环 + FamilyMind 血肉" 的混合架构
+- [x] **pi-mono 架构融合**：核心运行时参考 pi-mono（badlogic/pi-mono）的分层设计，循环模式保留 Hermes 风格，形成 "pi-mono 骨架 + Hermes 循环 + SalesMind 血肉" 的混合架构
 - [x] **CLI 模式**：`cli.py` + `mind/agent_runner.py`，终端直接对话，与 Web 服务共用同一套 Agent 核心逻辑，支持 Kimi coding plan 等 LLM CLI 集成
 
 ### Phase 2.6b：稳定性修复（2026-05-02）
@@ -433,9 +433,9 @@ Agent 收到后，立即在下一次交互中优先关切呼吸状况。
 
 ---
 
-## 十一、AI 项目五维评估框架（FamilyMind 自检标准）
+## 十一、AI 项目五维评估框架（SalesMind 自检标准）
 
-> **来源与目的**：行业通用框架，用于判断 AI 项目是生产工具还是 demo。FamilyMind 每次重大迭代前必须跑一遍，防止被"夯爆了""颠覆性"之类的营销话术带偏。
+> **来源与目的**：行业通用框架，用于判断 AI 项目是生产工具还是 demo。SalesMind 每次重大迭代前必须跑一遍，防止被"夯爆了""颠覆性"之类的营销话术带偏。
 >
 > **评估频率**：定时（每次 Phase 升级前）+ 非定时（线上故障后、新增复杂功能前、替换核心组件前）。
 
@@ -449,7 +449,7 @@ Agent 收到后，立即在下一次交互中优先关切呼吸状况。
 | **4. 编排模式** | 并行/路由/链式/编排-执行是否系统化？ | 有并行执行 + 基本路由 | 显式编排框架（Orchestrator-Workers / Prompt Chaining）|
 | **5. 可靠性控制** | 输出质量谁评估？胡说八道怎么拦？ | 参数校验 + 基础安全扫描 | Evaluator + Guardrail + Feedback Loop + 自动重试 |
 
-### 11.2 FamilyMind 当前得分（2026-05-11）
+### 11.2 SalesMind 当前得分（2026-05-11）
 
 | 维度 | 得分 | 现状 | 差距 |
 |------|------|------|------|
@@ -459,7 +459,7 @@ Agent 收到后，立即在下一次交互中优先关切呼吸状况。
 | **4. 编排模式** | **5/10** | 并行工具 + delegate 子 Agent + Skill 路由好，但缺显式 Prompt Chain 和 Orchestrator-Workers | 长任务需系统化编排框架 |
 | **5. 可靠性控制** | **5/10** | 前置校验 + care_scanner + 串行锁 + Guardrail（时间敏感内容拦截）+ Evaluator（输出自检）有基础，但 Guardrail/Evaluator 未形成 Feedback Loop，任务失败无自动重试 | Guardrail 触发后需强制 tool call 重试；Evaluator 评分需影响迭代策略 |
 
-**总体判断**：FamilyMind 不是 demo，但离"可以放心让老人 7x24 依赖"还有明显距离。Phase 2.8 的 Guardrail + Evaluator 已补全可靠性基础，最大短板仍在 **3（规划）**（缺前瞻/重规划/失败回退）。
+**总体判断**：SalesMind 不是 demo，但离"可以放心让老人 7x24 依赖"还有明显距离。Phase 2.8 的 Guardrail + Evaluator 已补全可靠性基础，最大短板仍在 **3（规划）**（缺前瞻/重规划/失败回退）。
 
 ### 11.3 改进优先级
 
@@ -493,7 +493,7 @@ Agent 收到后，立即在下一次交互中优先关切呼吸状况。
 ## 十二、如何继续开发
 
 ```bash
-cd ~/family-mind
+cd ~/sales-mind
 claude
 ```
 

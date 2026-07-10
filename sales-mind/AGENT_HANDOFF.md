@@ -1,8 +1,8 @@
-# FamilyMind — 新机器迁移说明（给 Agent 读）
+# SalesMind — 新机器迁移说明（给 Agent 读）
 
 ## 这是什么
 
-FamilyMind 是一个基于企业微信的家庭 AI 管家系统，运行在 macOS 上。
+SalesMind 是一个基于企业微信的家庭 AI 管家系统，运行在 macOS 上。
 - 后端：FastAPI + Python 3.11
 - 数据库：PostgreSQL 15 + PGVector（Docker 本地运行）
 - 本地 LLM：LM Studio（默认端口 1234）
@@ -10,7 +10,7 @@ FamilyMind 是一个基于企业微信的家庭 AI 管家系统，运行在 macO
 - ASR：mlx-qwen3-asr（本地 MLX）
 - 管理后台：Streamlit（端口 8501）
 
-原始项目路径：`/Users/peter/family-mind`
+原始项目路径：`/Users/peter/sales-mind`
 
 ---
 
@@ -49,7 +49,7 @@ FamilyMind 是一个基于企业微信的家庭 AI 管家系统，运行在 macO
 
 ```bash
 cd /Users/peter
-tar xzvf family-mind.tar.gz
+tar xzvf sales-mind.tar.gz
 ```
 
 ### 2. 安装系统依赖
@@ -63,7 +63,7 @@ tar xzvf family-mind.tar.gz
 ### 3. 创建虚拟环境并安装依赖
 
 ```bash
-cd /Users/peter/family-mind
+cd /Users/peter/sales-mind
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -101,7 +101,7 @@ docker-compose up -d db
 lsof -i :5432
 ```
 
-如果有非 Docker 的 PostgreSQL 进程，先停止，否则 FamilyMind 会连错数据库。
+如果有非 Docker 的 PostgreSQL 进程，先停止，否则 SalesMind 会连错数据库。
 
 ### 6. 启动服务
 
@@ -125,7 +125,7 @@ streamlit run dashboard.py --server.port 8501
 
 ### 7. 配置企微回调（如需完整功能）
 
-- Cloudflare Tunnel：`cloudflared tunnel run familymind`
+- Cloudflare Tunnel：`cloudflared tunnel run salesmind`
 - 企微后台 URL：`https://wechat.peistock.win/wechat`
 - Token / EncodingAESKey 与 `.env` 一致
 
@@ -138,9 +138,9 @@ streamlit run dashboard.py --server.port 8501
    - PostgreSQL 数据在 Docker 卷里，不会随压缩包迁移。如需保留，需要单独导出/导入：
      ```bash
      # 旧机器导出
-     docker exec familymind-db-1 pg_dump -U family familymind > familymind.sql
+     docker exec salesmind-db-1 pg_dump -U family salesmind > salesmind.sql
      # 新机器导入
-     docker exec -i familymind-db-1 psql -U family familymind < familymind.sql
+     docker exec -i salesmind-db-1 psql -U family salesmind < salesmind.sql
      ```
 
 2. **本地 LLM 必须可用**
@@ -158,7 +158,7 @@ streamlit run dashboard.py --server.port 8501
 ## 如何继续开发
 
 ```bash
-cd /Users/peter/family-mind
+cd /Users/peter/sales-mind
 claude
 ```
 

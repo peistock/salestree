@@ -101,8 +101,8 @@ class AnalyticsStore:
             pg_host = os.getenv("DB_HOST", "localhost")
             pg_port = os.getenv("DB_PORT", "5432")
             pg_user = os.getenv("DB_USER", "family")
-            pg_pass = os.getenv("DB_PASSWORD", "familymind2026")
-            pg_db = os.getenv("DB_NAME", "familymind")
+            pg_pass = os.getenv("DB_PASSWORD", "salesmind2026")
+            pg_db = os.getenv("DB_NAME", "salesmind")
 
             pg_dsn = f"host={pg_host} port={pg_port} user={pg_user} password={pg_pass} dbname={pg_db}"
 
