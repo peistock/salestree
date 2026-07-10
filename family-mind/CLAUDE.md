@@ -26,6 +26,7 @@ type: project
 | **单家庭** | 系统只服务一个家庭，不考虑多租户 | 若未来商业化，需重写数据层和接入层 |
 | **企微渠道** | 家庭成员使用企业微信 | 若老人拒绝安装企微，接入层作废。gewechat（非官方个人微信协议）已评估后放弃；个人订阅号无客服消息权限，无法替代 |
 | **Mac 服务器** | 服务运行在爸爸的 Mac 上，7×24 小时开机 | Mac 合盖/断电/网络波动会导致服务中断 |
+| **混合部署** | 服务器运行销销主应用（FastAPI + PostgreSQL + 云 LLM）；SearXNG 保留在本地 Mac，通过 Cloudflare Tunnel `searxng.peistock.win` 暴露 | 云端机房 IP 易被搜索引擎反爬虫拦截；本地 Mac 断网时服务器搜索降级为 Chrome 百度搜索 fallback。`.env` 中 `SEARXNG_URL` 控制指向本地还是远程域名 |
 | **本地 LLM 为主** | 核心智能依赖 **LM Studio 本地 qwen/qwen3.6-35b-a3b**（端口 1234）；DeepSeek v4-flash / 百炼 qwen3.6-plus 作为 API 备选（`.env` 中切换 BASE_URL 即可） | 本地 35B 模型日常任务稳定，复杂任务（万字报告）输出质量可达 ~3500 字；API 费用 ¥0/月；不受网络波动影响；thinking mode 不可用 |
 | **Docker PostgreSQL** | PG 容器通过端口映射暴露 localhost:5432 | 本地其他 PostgreSQL 实例（如 pg0）可能抢占 5432 端口，导致 FamilyMind 连接到错误数据库并报密码认证失败。启动前必须检查 `lsof -i :5432` |
 | **本地隐私优先** | 敏感数据（病历）本地处理；上下文压缩走本地 Gemma 4 26B | 本地模型能力持续升级（qwen3.5-35b-a3b 已可胜任主模型），医疗相关回答质量可接受 |
@@ -270,7 +271,7 @@ Agent 收到后，立即在下一次交互中优先关切呼吸状况。
 | 记忆层 | Embedding | BGE-small-zh-v1.5 | 512维，中文优化 |
 | 记忆层 | 向量检索 | PGVector（ivfflat） | 与 PG 一体 |
 | 智能层 | 关联引擎 | Python 规则 + LLM 推理 | Phase 2.x 已完成 |
-| 世界域 | 聚合搜索 | SearXNG（Docker，localhost:8080，Cloudflare Tunnel `searxng.peistock.win`） | baidu/sogou/360search + bing news/google news/sogou wechat；默认 categories=news；**browse_open fallback**：SearXNG 被反爬虫拦截时自动降级到 Chrome 百度搜索 |
+| 世界域 | 聚合搜索 | SearXNG（Docker，默认 `localhost:8080`，可通过 `.env` 的 `SEARXNG_URL` 改为远程地址如 `https://searxng.peistock.win`） | baidu/sogou/360search + bing news/google news/sogou wechat；默认 categories=news；**browse_open fallback**：SearXNG 被反爬虫拦截时自动降级到 Chrome 百度搜索 |
 | 世界域 | 网页获取 | fetch_webpage + jina_reader | 直接 HTTP 获取静态页；Jina AI 转 Markdown 省 token |
 | 世界域 | 浏览器自动化 | CDP Proxy（localhost:3456）+ 独立 Chrome（端口 9222） | 动态渲染、登录态、交互操作（点击/填表/截图/滚动）；**启动**：`chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile`；请求需传 proxies=None 绕过 HTTP_PROXY |
 | 世界域 | Chrome 资源检索 | find-url.mjs | 搜本地 Chrome 书签/历史，定位内部系统和之前访问过的页面 |
@@ -399,6 +400,7 @@ Agent 收到后，立即在下一次交互中优先关切呼吸状况。
 - [x] **SearXNG 迁回本地**：从京东云 Docker 迁回 MacBook Pro 本地，利用家庭宽带住宅 IP 降低被搜索引擎反爬虫拦截概率；`data/searxng-settings.yml` 移除 `outgoing.proxies`，仅启用国内引擎（baidu、sogou、360search、bing news、google news、sogou wechat），显式禁用国外引擎
 - [x] **Cloudflare Tunnel 双域名**：`~/.cloudflared/config.yml` 新增 `searxng.peistock.win` → `localhost:8080`，与原有 `wechat.peistock.win` → `localhost:8001` 并存，云上服务通过固定域名调用本地 SearXNG
 - [x] **browse_open fallback**：`mind/tools.py` `search_web` 新增反爬虫检测（`wappass.baidu.com` / `antispider` / `验证码` / `captcha`），SearXNG 返回空或被拦截时自动 fallback 到 `browse_open` 打开百度搜索页提取结果，标记 `engine: baidu_browser`
+- [x] **SEARXNG_URL 可配置**（2026-07-10）：`mind/tools.py` 所有搜索工具改从 `.env` 的 `SEARXNG_URL` 读取 SearXNG 地址，支持服务器部署时指向远程 `https://searxng.peistock.win`，本地开发保持默认 `http://127.0.0.1:8080`
 - [x] **CDP Proxy Chrome 启动规范**：浏览器自动化依赖 Chrome 远程调试端口，`chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile`
 
 ### Phase 4：外挂大脑（Streamlit）（2026-05-16，已完成）
