@@ -132,6 +132,28 @@ streamlit run dashboard.py
 - **协作看板**：`http://localhost:8001/chat` — 与销销对话，进行客户研究、写跟进文案等
 - **资讯看板**：`http://localhost:8001/wechat_kb` — 查看公众号文章、知识库、线索库
 
+## 团队部署建议
+
+销销当前默认是「本地开发机」模式。要给同事用，推荐：**服务器跑主应用 + 数据库，SearXNG 留在本地 Mac**。
+
+原因：SearXNG 在云端机房 IP（如京东云）容易被百度/搜狗/360 反爬虫拦截，返回空结果或验证码；家庭宽带住宅 IP 稳定得多。
+
+配置方法：
+
+```bash
+# 服务器上的 .env
+SEARXNG_URL=https://searxng.peistock.win
+```
+
+本地 Mac 继续用 Docker 跑 SearXNG，并通过 Cloudflare Tunnel 把 `searxng.peistock.win` 暴露出去。主应用调用该域名即可。
+
+```bash
+# 本地开发/测试时的 .env
+SEARXNG_URL=http://127.0.0.1:8080
+```
+
+主应用、PostgreSQL、LLM（建议切云 API）全部放在服务器；同事只需浏览器访问。
+
 ## 使用示例
 
 在 Web 聊天输入：

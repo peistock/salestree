@@ -24,6 +24,12 @@ KNOWLEDGE_DIR = WORK_DIR / "knowledge"
 KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _searxng_search_url() -> str:
+    """从环境变量读取 SearXNG 地址，默认本地 127.0.0.1:8080"""
+    base = os.getenv("SEARXNG_URL", "http://127.0.0.1:8080").rstrip("/")
+    return base + "/search"
+
+
 class Toolkit:
     """Agent 可调用的安全工具（v1.1 标准信封版）"""
 
@@ -860,7 +866,7 @@ class Toolkit:
             return cached
 
         try:
-            url = "http://127.0.0.1:8080/search"
+            url = _searxng_search_url()
 
             def _search_category(cat: str, timeout: int = 8) -> tuple:
                 params = {
@@ -1138,7 +1144,7 @@ class Toolkit:
             return cached
 
         try:
-            url = "http://127.0.0.1:8080/search"
+            url = _searxng_search_url()
             params = {
                 "q": query,
                 "format": "json",
