@@ -1,7 +1,9 @@
 """
 定时任务调度器
-- 早 8:00 推送当日事项
-- 用药提醒
+- 早 7:30 早间销售简报
+- 午 11:30 午间行业快讯
+- 晚 20:00 晚间复盘
+- 每日早报/晚报推送
 - 每日凌晨 3:00 记忆摘要
 """
 import os
@@ -10,7 +12,10 @@ from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from mind.companion_routines import morning_routine, noon_routine, evening_routine, morning_news_push, evening_news_push
+from mind.companion_routines import (
+    morning_routine, noon_routine, evening_routine,
+    morning_news_push, evening_news_push,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,63 +26,6 @@ scheduler = BackgroundScheduler(
 )
 
 
-def morning_routine():
-    """早 8:00：扫描今日事项，推送给所有人"""
-    from mind.wechat import push_text
-    from mind.memory import get_conn
-
-    # 读取销售日历
-    cal_path = os.path.join(os.getenv("DATA_DIR", "./data"), "knowledge", "family_calendar.txt")
-    today = datetime.now().strftime("%m-%d")
-    text = "早上好！今日无特殊安排。"
-
-    if os.path.exists(cal_path):
-        try:
-            with open(cal_path, "r", encoding="utf-8") as f:
-                lines = [l.strip() for l in f if l.strip() and today in l]
-            if lines:
-                text = "早上好！今日安排：\n" + "\n".join(lines)
-        except Exception as e:
-            logger.error(f"读取日历失败: {e}")
-
-    # 读取用药提醒
-    med_path = os.path.join(os.getenv("DATA_DIR", "./data"), "knowledge", "medication.txt")
-    if os.path.exists(med_path):
-        try:
-            with open(med_path, "r", encoding="utf-8") as f:
-                meds = [l.strip() for l in f if l.strip() and not l.startswith("#")]
-            if meds:
-                text += "\n\n💊 今日用药提醒：\n" + "\n".join(f"  • {m}" for m in meds)
-        except Exception as e:
-            logger.error(f"读取用药清单失败: {e}")
-
-    # 推送给所有销售人员
-    try:
-        conn = get_conn()
-        with conn.cursor() as c:
-            c.execute("SELECT user_id FROM user_profiles WHERE role='长辈'")
-            users = c.fetchall()
-        conn.close()
-
-        for (user_id,) in users:
-            result = push_text(user_id, text)
-            if result.get("errcode") != 0:
-                logger.warning(f"推送 {user_id} 失败: {result}")
-
-        # 记录任务执行
-        conn = get_conn()
-        with conn.cursor() as c:
-            c.execute(
-                "INSERT INTO scheduled_tasks (task_name, status, detail) VALUES (%s, %s, %s)",
-                ("morning_routine", "success", f"推送给 {len(users)} 位长辈")
-            )
-            conn.commit()
-        conn.close()
-
-    except Exception as e:
-        logger.error(f"早播报失败: {e}")
-
-
 def daily_consolidation():
     """每日凌晨 3:00：对话摘要与记忆沉淀"""
     logger.info("执行每日记忆整理...")
@@ -86,20 +34,20 @@ def daily_consolidation():
 
 
 def daily_debriefing():
-    """每日 21:00：生成晚间销售日报简报（Phase 4）"""
-    logger.info("执行每日晚间简报生成...")
-    from mind.memory import get_elderly_users, get_conn, save_couple_notification
+    """每日 21:00：生成销售日报简报"""
+    logger.info("执行每日销售日报生成...")
+    from mind.memory import get_sales_users, get_conn, save_notification
     from mind.llm_client import chat
 
-    elders = get_elderly_users()
-    if not elders:
+    users = get_sales_users()
+    if not users:
         logger.warning("晚间简报：未找到销售用户")
         return
 
     today_str = datetime.now().strftime("%Y-%m-%d")
-    for elder in elders:
-        user_id = elder["user_id"]
-        user_name = elder.get("name", user_id)
+    for user in users:
+        user_id = user["user_id"]
+        user_name = user.get("name", user_id)
         try:
             conn = get_conn()
             with conn.cursor() as c:
@@ -134,17 +82,17 @@ def daily_debriefing():
             ])
 
             narrative = chat(
-                system="你是销售智能助手销销。请根据今天与长辈的对话记录，用温暖亲切的小辈口吻，为夫妻生成一段'今日销售日报'。不超过200字，像讲故事一样自然，包含：今天互动了什么、老人状态如何、有没有需要关注的事。",
+                system="你是销售智能助手销销。请根据今天与销售同事的对话记录，生成一段'今日销售日报'。不超过200字，包含：今天主要讨论了哪些客户/商机、有没有关键进展、是否需要后续跟进。",
                 user_prompt=f"今天是{today_str}。与{user_name}的对话记录：\n{dialogue}\n\n请生成今日销售日报：",
-                model=MODEL_DAILY,
+                model=os.getenv("MODEL_DAILY", "deepseek-chat"),
                 max_tokens=400,
                 temperature=0.7,
             )
 
-            save_couple_notification(
+            save_notification(
                 user_id=user_id,
                 type_="debriefing",
-                title=f"{user_name} 的今日叙事",
+                title=f"{user_name} 的今日销售日报",
                 content=narrative
             )
             logger.info(f"晚间简报已生成: {user_name}")
@@ -194,21 +142,21 @@ def add_reminder(user_id: str, content: str, remind_at: datetime):
 
 def init_scheduler():
     """初始化定时任务"""
-    # Phase 2.x：早安仪式（7:30）
+    # Phase 2.x：早间销售简报（7:30）
     scheduler.add_job(
         morning_routine,
         CronTrigger(hour=7, minute=30),
         id="morning_routine",
         replace_existing=True
     )
-    # Phase 2.x：午间关怀（11:30）
+    # Phase 2.x：午间行业快讯（11:30）
     scheduler.add_job(
         noon_routine,
         CronTrigger(hour=11, minute=30),
         id="noon_routine",
         replace_existing=True
     )
-    # Phase 2.x：晚间放松（20:00）
+    # Phase 2.x：晚间复盘（20:00）
     scheduler.add_job(
         evening_routine,
         CronTrigger(hour=20, minute=0),

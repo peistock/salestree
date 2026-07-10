@@ -16,14 +16,22 @@ logger = logging.getLogger(__name__)
 
 # 估算阈值：中文字符≈1 token，英文≈0.3 token，取保守值
 DEFAULT_TARGET_TOKENS = 8000
+# 触发压缩的 token 比例：达到 target 的 75% 即开始压缩，避免反复触碰上限
+DEFAULT_TRIGGER_RATIO = 0.75
 # 尾部保护：最近 N 条消息不动（按条数，实际会对齐到完整回合）
 PROTECT_LAST_N = 4
 # 头部保护：system + 前 2 轮（按条数，实际会对齐到完整回合）
 PROTECT_HEAD_N = 3
+# 压缩前预处理：工具输出和参数截断长度（廉价降噪）
+TRIM_TOOL_OUTPUT = 800
+TRIM_TOOL_ARGS = 120
 
 # 本地模型配置（LM Studio）
 LOCAL_BASE_URL = os.getenv("LOCAL_MODEL_URL", "http://127.0.0.1:1234/v1")
 LOCAL_SUMMARY_MODEL = os.getenv("LOCAL_MODEL_NAME", "gemma-4-26b-a4b-it-ud")
+
+# Hermes 风格摘要注入标记
+COMPACTION_PREFIX = "[CONTEXT COMPACTION]"
 
 
 def _estimate_tokens(text: str) -> int:
@@ -43,6 +51,17 @@ def _estimate_messages_tokens(messages: List[Dict]) -> int:
                 total += _estimate_tokens(tc.get("function", {}).get("arguments", ""))
         total += _estimate_tokens(content)
     return total
+
+
+def should_compress(messages: List[Dict], target_tokens: int = DEFAULT_TARGET_TOKENS, trigger_ratio: float = DEFAULT_TRIGGER_RATIO) -> bool:
+    """
+    判断当前 messages 是否达到压缩触发条件。
+    使用 trigger_ratio 留出 headroom，避免在阈值附近反复压缩。
+    """
+    if not messages:
+        return False
+    threshold = int(target_tokens * trigger_ratio)
+    return _estimate_messages_tokens(messages) > threshold
 
 
 def _find_turn_boundaries(messages: List[Dict]) -> List[tuple]:
@@ -74,6 +93,7 @@ def _find_turn_boundaries(messages: List[Dict]) -> List[tuple]:
 def _generate_turn_manifest(messages: List[Dict], start: int, end: int) -> str:
     """
     用代码生成中间轮次的工具调用清单（本地模型不可用时 fallback）。
+    压缩前先做廉价预处理：截断长工具输出和长参数，减少噪声和 token。
     """
     lines = []
     for i in range(start, end):
@@ -84,13 +104,13 @@ def _generate_turn_manifest(messages: List[Dict], start: int, end: int) -> str:
             for tc in msg["tool_calls"]:
                 name = tc.get("function", {}).get("name", "?")
                 args = tc.get("function", {}).get("arguments", "")
-                args_short = args[:200] + "..." if len(args) > 200 else args
+                args_short = args[:TRIM_TOOL_ARGS] + "..." if len(args) > TRIM_TOOL_ARGS else args
                 lines.append(f"[Turn {i}] → 调用 {name}({args_short})")
 
         elif role == "tool":
             content = msg.get("content", "") or ""
-            if len(content) > 400:
-                content = content[:400] + "..."
+            if len(content) > TRIM_TOOL_OUTPUT:
+                content = content[:TRIM_TOOL_OUTPUT] + "..."
             lines.append(f"         结果：{content}")
 
         else:
@@ -154,6 +174,7 @@ def compress_messages(
     messages: List[Dict],
     llm_chat_fn=None,  # 保留兼容旧接口，但不再使用
     target_tokens: int = DEFAULT_TARGET_TOKENS,
+    trigger_ratio: float = DEFAULT_TRIGGER_RATIO,
     todo_injection: Optional[str] = None,
 ) -> List[Dict]:
     """
@@ -162,16 +183,17 @@ def compress_messages(
     Args:
         messages: 当前对话历史
         llm_chat_fn: 已废弃，保留兼容旧代码
-        target_tokens: 触发压缩的 token 阈值
+        target_tokens: token 上限（压缩后应低于此值）
+        trigger_ratio: 触发压缩的 token 比例（默认 0.75），避免在阈值附近反复压缩
         todo_injection: 如果有活跃的 todo 列表，压缩后重新注入
 
     Returns:
         压缩后的 messages（如果不需要压缩则返回原列表）
     """
-    total_tokens = _estimate_messages_tokens(messages)
-    if total_tokens <= target_tokens:
+    if not should_compress(messages, target_tokens, trigger_ratio):
         return messages
 
+    total_tokens = _estimate_messages_tokens(messages)
     n = len(messages)
     turns = _find_turn_boundaries(messages)
 
@@ -226,7 +248,8 @@ def compress_messages(
         compressed.append(messages[i])
 
     # 2. 摘要（替换中间区域）
-    compressed.append({"role": "user", "content": f"[上下文摘要] {summary}"})
+    # Hermes 风格：用 system 角色注入，避免污染用户意图理解
+    compressed.append({"role": "system", "content": f"{COMPACTION_PREFIX} {summary}"})
 
     # 3. 如果有 todo 注入，加在摘要后面
     if todo_injection:

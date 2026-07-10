@@ -1,11 +1,12 @@
 """
-销销 外挂大脑 —— Streamlit 管理界面（Phase 4）
+销销 外挂大脑 —— Streamlit 管理界面
 
-夫妻与 Agent 的协作界面：
+销售团队与 Agent 的协作界面：
 - 今日托付（课前 Briefing）
 - 晚间简报（课后 Debriefing）
 - 紧急插话（Override）
 - 记忆透明（查看/删除）
+- 客户与商机
 - 文档上传（知识库）
 
 启动：streamlit run dashboard.py --server.port 8501
@@ -24,8 +25,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent))
 
 from mind.memory import (
-    get_elderly_users,
-    get_couple_users,
+    get_all_users,
     get_user_profile,
     get_episodes,
     get_summaries,
@@ -255,13 +255,9 @@ if DASHBOARD_PASSWORD:
         st.stop()
 
 # ========== 加载数据 ==========
-elders = get_elderly_users()
-couples = get_couple_users()
-all_members = elders + couples
-member_map = {m["user_id"]: m["name"] for m in all_members}
-elder_map = {e["user_id"]: e["name"] for e in elders}
-elder_options = [(e["user_id"], e["name"]) for e in elders]
-all_options = [(m["user_id"], m["name"]) for m in all_members]
+users = get_all_users()
+member_map = {m["user_id"]: m["name"] for m in users}
+user_options = [(m["user_id"], m["name"]) for m in users]
 
 # ========== 侧边栏 ==========
 st.sidebar.image(LOGO_PATH, width=60)
@@ -269,10 +265,9 @@ st.sidebar.caption("销售智能协作空间 — 管理界面")
 st.sidebar.divider()
 
 # 销售人员
-st.sidebar.subheader("👨‍👩‍👧‍👦 销售人员")
-for m in all_members:
-    role_icon = "👴" if m["user_id"].startswith("grand") else "👨" if m["user_id"] in ("dad", "mom") else "👤"
-    st.sidebar.write(f"{role_icon} {m['name']} ({m['user_id']})")
+st.sidebar.subheader("销售人员")
+for m in users:
+    st.sidebar.write(f"👤 {m['name']} ({m['user_id']})")
 
 st.sidebar.divider()
 
@@ -303,7 +298,7 @@ with tabs[0]:
     st.header("📝 今日托付")
     st.caption("每天早上花 2 分钟告诉 Agent 今天重点关注什么")
 
-    for user_id, name in elder_options:
+    for user_id, name in user_options:
         with st.expander(f"{name} 的今日关注", expanded=True):
             # 显示已有的今日托付
             existing = get_today_briefings(user_id)
@@ -319,7 +314,7 @@ with tabs[0]:
             new_briefing = st.text_area(
                 f"写今日关注...",
                 key=f"briefing_input_{user_id}",
-                placeholder=f"例如：今天盯着{name}的血压",
+                placeholder=f"例如：今天重点跟进{name}负责的快手方案",
                 label_visibility="collapsed",
             )
             if st.button(f"保存 {name} 的托付", key=f"save_briefing_{user_id}"):
@@ -387,7 +382,7 @@ with tabs[2]:
                 "dismissed": "❌ 已取消",
             }.get(ov["status"], ov["status"])
             with st.container(border=True):
-                st.write(f"{priority_color} **{elder_map.get(ov['user_id'], ov['user_id'])}**：{ov['content']}")
+                st.write(f"{priority_color} **{member_map.get(ov['user_id'], ov['user_id'])}**：{ov['content']}")
                 st.caption(f"优先级 {ov['priority']} | {status_color} | by {ov['created_by']} | {ov['created_at']}")
                 if ov["status"] == "pending":
                     if st.button("取消", key=f"dismiss_{ov['id']}"):
@@ -399,8 +394,8 @@ with tabs[2]:
     st.divider()
     st.subheader("发送新指令")
 
-    target_user = st.selectbox("选择老人", options=[uid for uid, _ in elder_options], format_func=lambda x: elder_map.get(x, x))
-    override_content = st.text_area("指令内容", placeholder="例如：爸刚才说有点喘，你多问他几句")
+    target_user = st.selectbox("选择用户", options=[uid for uid, _ in user_options], format_func=lambda x: member_map.get(x, x))
+    override_content = st.text_area("指令内容", placeholder="例如：客户刚才提到预算紧张，你下次跟进时重点讲 ROI")
     priority = st.slider("优先级", 1, 3, 2, format="%d", help="3=立即 2=紧急 1=普通")
 
     if st.button("📤 发送指令"):
@@ -414,11 +409,11 @@ with tabs[2]:
 # ---------- 记忆透明 ----------
 with tabs[3]:
     st.header("🔍 记忆透明")
-    st.caption("老人可以随时问'你都知道我些什么'，这里就是你看到的全部")
+    st.caption("用户可以随时问'你都知道我些什么'，这里就是你看到的全部")
 
     selected_member = st.selectbox(
         "选择查看对象",
-        options=[uid for uid, _ in all_options],
+        options=[uid for uid, _ in user_options],
         format_func=lambda x: member_map.get(x, x),
         key="memory_select",
     )

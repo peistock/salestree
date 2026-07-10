@@ -1,5 +1,5 @@
 """
-今日简报推送 —— 从 tophub.today/daily 抓取早报/晚报，生成老人友好的简报
+今日简报推送 —— 从 tophub.today/daily 抓取早报/晚报，生成销售同事友好的简报
 """
 import os
 import re
@@ -14,7 +14,7 @@ from mind.llm_client import chat
 logger = logging.getLogger(__name__)
 MODEL_DAILY = os.getenv("MODEL_DAILY", "deepseek-chat")
 
-# 排除过于垂直的领域（不适合老人）
+# 排除过于垂直的领域（不适合销售场景）
 _SKIP_KEYWORDS = {
     "水泥", "黑色系", "能化", "期货", "ETF", "期权", "铁矿石", "螺纹钢",
     "焦煤", "焦炭", "纯碱", "玻璃", "PVC", "甲醇", "原油", "沥青",
@@ -110,7 +110,7 @@ def fetch_tophub_daily(limit: int = 30, period: Literal["morning", "evening", "a
 
 def generate_briefing(news_items: List[Tuple[str, str]], period: Literal["morning", "evening"] = "morning") -> str:
     """
-    用 LLM 把早报/晚报列表转成老人友好的简报。
+    用 LLM 把早报/晚报列表转成销售同事友好的简报。
     返回简报文本（已格式化）。
     """
     if not news_items:
@@ -123,8 +123,8 @@ def generate_briefing(news_items: List[Tuple[str, str]], period: Literal["mornin
 
     prompt = f"""今天是{today}，以下是从各大平台整理的今日{label}标题。请为销售同事生成一份简短的"今日{label}"，要求：
 
-1. 语气亲切温暖，像小辈跟长辈聊天
-2. 只挑 3-5 条最重要、最贴近生活的（健康、天气、社会、科技便民）
+1. 语气专业、有信息量，像同事间分享资讯
+2. 只挑 3-5 条最重要、对商业/行业/客户最有用的（科技、消费、互联网、政策、市场动态）
 3. 每条用一句话概括，不要太长
 4. 开头说"各位同事，今天{label}来啦～"
 5. 结尾加一句轻松的提醒（比如"今天外面风大，出门多穿点"之类的，如果没有天气信息就说"今天的事就这些，有事儿随时找我～"）
@@ -138,7 +138,7 @@ def generate_briefing(news_items: List[Tuple[str, str]], period: Literal["mornin
 
     try:
         return chat(
-            system=f"你是销售智能助手销销，正在给长辈播报今日{label}。",
+            system=f"你是销售智能助手销销，正在给销售同事播报今日{label}。",
             user_prompt=prompt,
             model=MODEL_DAILY,
             max_tokens=600,

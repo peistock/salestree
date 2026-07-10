@@ -21,7 +21,9 @@ from mind.tool_result import ToolResult
 from mind.todo_store import TodoStore, todo_tool
 from mind.plan_store import PlanStore
 from mind.plan_tool import plan_tool
-from mind.context_compressor import compress_messages
+from mind.context_compressor import compress_messages, should_compress
+from mind.iteration_budget import build_budget, IterationBudget
+from mind.message_sanitization import sanitize_messages
 from mind.agent_events import AgentEvent, AgentEventType
 from mind.agent_message import AgentMessage
 from mind.agent_trace import AgentTraceStore
@@ -161,6 +163,18 @@ class AgentLoop:
         care_signals = []
         final_reply = ""
         last_heartbeat = time.time()
+
+        # 三维预算：迭代 / 时间 / token
+        budget = build_budget(max_iterations=max_iterations)
+        logger.info(f"[AgentLoop] 预算: {budget.summary()}")
+
+        # Evaluator 反馈循环控制
+        eval_feedback_count = 0
+        MAX_EVAL_FEEDBACK = 2
+
+        # Verify 阶段反馈循环控制
+        verify_feedback_count = 0
+        MAX_VERIFY_FEEDBACK = 1
 
         # 进度话术池（随机轮换，避免重复）
         _HB_IN_PROGRESS = [
@@ -353,12 +367,35 @@ class AgentLoop:
                         "iteration": iteration,
                     }
 
+                # 三维预算检查：时间 / token / 迭代
+                llm_messages = [m.to_llm() for m in messages]
+                stop_reason = budget.check(iteration, llm_messages)
+                if stop_reason:
+                    budget.mark_stopped(stop_reason)
+                    if checkpoint_path:
+                        self._save_checkpoint(messages, iteration, checkpoint_path)
+                    logger.warning(f"[AgentLoop] 预算耗尽 ({stop_reason})，优雅退出")
+                    self._emit(AgentEvent(
+                        type=AgentEventType.AGENT_END,
+                        iteration=iteration,
+                        message=f"预算耗尽: {stop_reason}",
+                    ))
+                    return {
+                        "reply": self._build_budget_exhausted_reply(stop_reason),
+                        "final_messages": messages,
+                        "care_signals": care_signals,
+                        "iteration": iteration,
+                    }
+
                 self._emit(AgentEvent(type=AgentEventType.TURN_START, iteration=iteration))
 
                 now = time.time()
                 if now - last_heartbeat > HEARTBEAT_INTERVAL:
                     _send_heartbeat()
                     last_heartbeat = now
+
+                # Plan 阶段：复杂任务首轮且未制定计划时，提醒 LLM 先调用 plan 工具
+                self._maybe_inject_plan_reminder(messages, iteration)
 
                 messages = self._sanitize_messages(messages)
 
@@ -372,8 +409,9 @@ class AgentLoop:
                             content=f"【系统提醒】{plan_injection}"
                         ))
 
-                # 在 LLM API 边界处转换为标准 dict 格式
+                # 在 LLM API 边界处转换为标准 dict 格式，并做 Hermes 风格清理
                 llm_messages = [m.to_llm() for m in messages]
+                llm_messages = sanitize_messages(llm_messages)
                 resp = self.llm.chat_with_tools(
                     messages=llm_messages,
                     tools=tools,
@@ -465,10 +503,10 @@ class AgentLoop:
                     # Plan 自动推进：如果执行了当前步骤预期的工具，标记步骤完成
                     self._advance_plan_if_applicable(executables)
 
-                    if iteration > 0 and iteration % 4 == 0:
+                    # 上下文压缩：按 token 阈值触发，而非固定迭代次数
+                    dict_messages = [m.to_llm() for m in messages]
+                    if should_compress(dict_messages):
                         todo_injection = self.todo_store.format_for_injection()
-                        # 压缩器边界：AgentMessage → dict → AgentMessage
-                        dict_messages = [m.to_llm() for m in messages]
                         compressed = compress_messages(
                             messages=dict_messages,
                             llm_chat_fn=self.llm.chat,
@@ -476,6 +514,9 @@ class AgentLoop:
                         )
                         if compressed is not dict_messages:
                             messages = [AgentMessage.from_llm(m) for m in compressed]
+                            logger.info(f"迭代 {iteration} 完成上下文压缩")
+                    else:
+                        logger.debug(f"迭代 {iteration} 未达压缩阈值，跳过")
 
                     if checkpoint_path:
                         self._save_checkpoint(messages, iteration + 1, checkpoint_path)
@@ -494,18 +535,41 @@ class AgentLoop:
                         self._emit(AgentEvent(type=AgentEventType.TURN_END, iteration=iteration))
                         continue
 
-                    final_reply = self._stream_reply(msg.content or "销销想了想，但是有点糊涂了...")
+                    final_content = msg.content or "销销想了想，但是有点糊涂了..."
+
+                    # Evaluator：输出质量自检，在流式输出前拦截低质量回复
+                    if final_content and len(final_content) > 200:
+                        eval_issues = self._evaluate_output(final_content)
+                        if eval_issues:
+                            eval_feedback_count += 1
+                            if eval_feedback_count <= MAX_EVAL_FEEDBACK:
+                                logger.warning(f"[Evaluator] 检测到问题 (第{eval_feedback_count}/{MAX_EVAL_FEEDBACK}次): {eval_issues}")
+                                messages.append(AgentMessage.system(
+                                    content=f"【系统自检】上次回复存在以下问题，请修正：{eval_issues}。如需补充信息，请调用工具。"
+                                ))
+                                self._emit(AgentEvent(type=AgentEventType.TURN_END, iteration=iteration))
+                                continue
+                            else:
+                                logger.warning(f"[Evaluator] 问题仍存在，但已达到最大反馈次数 {MAX_EVAL_FEEDBACK}，返回当前结果")
+
+                    # Verify：基于目标/计划的最终校验（Plan → Execute → Verify 的 Verify 阶段）
+                    if final_content and verify_feedback_count < MAX_VERIFY_FEEDBACK:
+                        verify_issues = self._verify_result(messages, final_content)
+                        if verify_issues:
+                            verify_feedback_count += 1
+                            logger.warning(f"[Verify] 检测到问题: {verify_issues}")
+                            messages.append(AgentMessage.system(
+                                content=f"【结果校验】当前回复尚未充分满足需求：{verify_issues}。请补充信息或修正回答。"
+                            ))
+                            self._emit(AgentEvent(type=AgentEventType.TURN_END, iteration=iteration))
+                            continue
+
+                    final_reply = self._stream_reply(final_content)
                     self._emit(AgentEvent(type=AgentEventType.TURN_END, iteration=iteration))
                     break
 
             else:
                 final_reply = self._build_max_iter_reply()
-
-            # Evaluator：输出质量自检（已禁用，避免污染用户可见回复）
-            # if final_reply and len(final_reply) > 200:
-            #     eval_issues = self._evaluate_output(final_reply)
-            #     if eval_issues:
-            #         logger.warning(f"[Evaluator] 检测到问题: {eval_issues}")
 
             self._emit(AgentEvent(
                 type=AgentEventType.AGENT_END,
@@ -514,7 +578,7 @@ class AgentLoop:
 
         except Exception as e:
             logger.error(f"Tool Calling 循环异常: {e}", exc_info=True)
-            final_reply = "销销出了点问题，请您稍后再试，或者联系爸爸帮忙看看。"
+            final_reply = "销销出了点问题，请您稍后再试，或者联系管理员帮忙看看。"
             try:
                 if checkpoint_path:
                     self._save_checkpoint(
@@ -697,6 +761,30 @@ class AgentLoop:
 
         return "这部分有点复杂，销销还需要一点时间才能做完。您回复「继续」，我接着干～"
 
+    def _build_budget_exhausted_reply(self, reason: str) -> str:
+        """时间/token/迭代预算耗尽时，给出可续接的回复。"""
+        if reason.startswith("time_budget_exceeded"):
+            prefix = "这部分需要的时间比预期长，销销先保存了当前进度。"
+        elif reason.startswith("token_budget_exceeded"):
+            prefix = "上下文有点长，销销先暂停一下，避免超出处理上限。"
+        else:
+            prefix = "这一步需要的轮次比较多，销销先记下了当前进度。"
+
+        files = []
+        try:
+            for p in self.work_dir.rglob("*"):
+                if p.is_file() and p.stat().st_size > 100:
+                    rel = p.relative_to(self.work_dir)
+                    files.append(f"- {rel}（{p.stat().st_size // 1024}KB）")
+        except Exception:
+            pass
+
+        if files:
+            file_list = "\n".join(files[:5])
+            return f"{prefix}\n\n目前已有的文件：\n{file_list}\n\n您回复「继续」，我就接着把剩下的做完！"
+
+        return f"{prefix} 您回复「继续」，我就接着把剩下的做完！"
+
     def _save_checkpoint(self, messages: List[AgentMessage], iteration: int, checkpoint_path):
         """保存当前任务状态到 checkpoint 文件。"""
         try:
@@ -820,6 +908,61 @@ class AgentLoop:
 
         return "；".join(issues) if issues else ""
 
+    def _verify_result(self, messages: List[AgentMessage], final_content: str) -> str:
+        """
+        Verify 阶段：检查最终回复是否满足用户原始目标。
+        返回问题描述或空字符串（表示通过）。
+        """
+        if not self.llm or not final_content:
+            return ""
+
+        # 提取原始目标（第一条 user 消息）
+        original_goal = ""
+        for msg in messages:
+            if msg.role == "user" and msg.content:
+                original_goal = msg.content
+                break
+        if not original_goal:
+            return ""
+
+        # 提取计划摘要（如果有）
+        plan_summary = ""
+        if self.plan_store and self.plan_store.has_plan():
+            plan_summary = self.plan_store.get_summary()
+
+        system = """你是一个严格的输出校验员。请判断下面的回复是否充分回答了用户的问题/完成了任务。
+
+校验标准：
+1. 回复是否直接回答了用户问题，没有回避或转移话题
+2. 回复是否有具体信息/数据/结论，而不是泛泛而谈
+3. 如果涉及多步骤任务，是否完成了所有关键步骤
+4. 如果回复中说"需要进一步搜索/确认"但没有实际行动，视为不完整
+
+只输出 JSON：{"passed": true/false, "issues": "问题描述，无则空字符串"}"""
+
+        user_prompt = f"""用户目标：{original_goal}
+
+执行计划：
+{plan_summary or "无明确计划"}
+
+---
+
+助手回复：
+{final_content[:2000]}
+
+---
+
+请输出 JSON 校验结果。"""
+
+        try:
+            response = self.llm.chat(system, user_prompt, max_tokens=300, temperature=0.3, json_mode=True)
+            data = json.loads(response)
+            if not data.get("passed", True):
+                return data.get("issues", "校验未通过")
+        except Exception as e:
+            logger.warning(f"[Verify] 校验调用失败: {e}")
+        return ""
+
     def _advance_plan_if_applicable(self, executables: list[Tuple]) -> None:
         """检查已执行的工具是否匹配当前 plan 步骤的预期工具，如果是则推进计划。"""
         if not self.plan_store or not self.plan_store.is_active():
@@ -864,6 +1007,41 @@ class AgentLoop:
                     total=len(steps),
                     description=steps[new_step_idx]["description"],
                 ))
+
+    def _maybe_inject_plan_reminder(self, messages: List[AgentMessage], iteration: int) -> None:
+        """Plan 阶段：复杂任务首轮且未制定计划时，提醒 LLM 先调用 plan 工具。"""
+        if iteration != 0 or not self.plan_store:
+            return
+        if self.plan_store.has_plan():
+            return
+
+        # 提取最后一条用户消息
+        last_user_query = ""
+        for msg in reversed(messages):
+            if msg.role == "user" and msg.content:
+                last_user_query = msg.content
+                break
+        if not last_user_query:
+            return
+
+        query_lower = last_user_query.lower()
+        has_planning_keyword = any(kw in query_lower for kw in _PLANNING_KEYWORDS)
+
+        # 检查是否加载了规划型 skill（system prompt 中提及）
+        has_planning_skill = False
+        for msg in messages:
+            if msg.role == "system" and msg.content:
+                if any(skill in msg.content for skill in _PLANNING_SKILLS):
+                    has_planning_skill = True
+                    break
+
+        if has_planning_keyword or has_planning_skill:
+            reminder = (
+                "【系统提醒】这是一个多步骤复杂任务，请先调用 plan 工具制定一个可执行计划，"
+                "再按步骤执行。计划应包含清晰的步骤编号、描述和预计使用的工具。"
+            )
+            messages.append(AgentMessage.assistant(content=reminder))
+            logger.info("[Plan] 检测到复杂任务，已注入计划制定提醒")
 
     def _reflect_on_past(self, messages: List[AgentMessage]) -> str:
         """

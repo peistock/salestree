@@ -2,7 +2,7 @@
 销销 - FastAPI 主服务
 - 企微消息接收与回复
 - 语音消息处理入口
-- 健康检查
+- 状态检查
 - 启动时初始化数据库和定时任务
 """
 import os
@@ -16,7 +16,7 @@ import asyncio
 import re
 from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, List
 
 from dotenv import load_dotenv
 load_dotenv(override=True)
@@ -114,6 +114,34 @@ def _notify_unfinished_checkpoints():
         logger.warning(f"启动 checkpoint 扫描失败: {e}")
 
 
+def _load_user_checkpoint(user_id: str) -> Optional[dict]:
+    """加载用户未过期的 checkpoint，不存在或过期返回 None"""
+    cp_path = Path(os.getenv("DATA_DIR", "./data")) / "checkpoints" / f"{user_id}.json"
+    if not cp_path.exists():
+        return None
+    try:
+        data = json.loads(cp_path.read_text(encoding="utf-8"))
+        if time.time() - data.get("timestamp", 0) > FamilyAgent.CHECKPOINT_TTL:
+            return None
+        return data
+    except Exception:
+        return None
+
+
+def _extract_history_messages(checkpoint: dict) -> List[dict]:
+    """从 checkpoint 中提取可展示的历史对话消息（user/assistant）"""
+    history = []
+    for m in checkpoint.get("messages", []):
+        role = m.get("role")
+        content = m.get("content", "")
+        if role in ("user", "assistant") and content:
+            # 跳过背景信息注入和恢复提示
+            if content.startswith("【背景信息】") or "这是从中断处恢复的任务" in content:
+                continue
+            history.append({"role": role, "content": content})
+    return history
+
+
 def _ensure_peistock():
     """检测 peistock API（端口3457），未启动则自动拉起"""
     import urllib.request
@@ -149,7 +177,7 @@ def _ensure_peistock():
             if data.get("status") == "ok":
                 logger.info("peistock API 自动启动成功")
             else:
-                logger.warning("peistock API 启动后健康检查异常")
+                logger.warning("peistock API 启动后状态检查异常")
     except Exception as e:
         logger.warning(f"peistock API 自动启动失败: {e}")
 
@@ -277,12 +305,7 @@ _mp_pending = {}      # openid -> 等待身份确认
 _mp_visitor_counter = 0
 
 _MP_IDENTITY_KEYWORDS = {
-    "爷爷": "grandpa",
-    "奶奶": "grandma",
-    "外公": "grandpa2",
-    "外婆": "grandma2",
-    "爸爸": "dad",
-    "妈妈": "mom",
+    # 销售场景不使用公众号身份关键词自动映射
 }
 
 
@@ -564,7 +587,7 @@ def _process_text_locked(user_id: str, content: str, channel: MessageChannel):
                     channel.send_text(user_id, random.choice(_START_RESUME))
 
             elif event.type == AgentEventType.PLAN_CREATED:
-                # 计划生成后向老人推送总体安排（只发一次）
+                # 计划生成后向用户推送总体安排（只发一次）
                 total = event.total or 0
                 steps = event.steps_summary or []
                 if total > 0:
@@ -805,7 +828,7 @@ def process_image(user_id: str, media_id: str, msg_id: str, channel: MessageChan
         channel.send_text(user_id, "销销处理图片时出了点问题，您把内容打字发给我吧。")
 
 
-# ========== 健康检查 ==========
+# ========== 状态检查 ==========
 @app.get("/health")
 def health():
     return {"status": "销销 running", "timestamp": int(time.time())}
@@ -854,6 +877,128 @@ def _extract_task_title(result_path: Path) -> str:
     return ""
 
 
+def _get_task_title(work_dir: Path) -> str:
+    """获取任务标题：优先使用用户自定义标题，其次自动提取，最后回退目录名"""
+    try:
+        meta_path = work_dir / "meta.json"
+        if meta_path.exists():
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            custom = meta.get("title", "").strip()
+            if custom:
+                return custom[:60]
+    except Exception as e:
+        logger.warning(f"读取任务 meta 失败: {e}")
+
+    # 优先从 conversation.md 提取第一条用户查询作为标题（反映用户真实意图）
+    query_title = _extract_first_query(work_dir)
+    if query_title:
+        return query_title
+
+    # 其次读 result.md
+    result_md = work_dir / "result.md"
+    title = _extract_task_title(result_md)
+    if title:
+        return title
+
+    # 再尝试其他 .md 文件
+    md_files = [p for p in work_dir.rglob("*.md") if p.is_file() and p.name not in {"result.md", "conversation.md"}]
+    if md_files:
+        md_files.sort(key=lambda p: p.stat().st_size, reverse=True)
+        title = _extract_task_title(md_files[0])
+        if title:
+            return title
+
+    return work_dir.name
+
+
+def _extract_first_query(work_dir: Path) -> str:
+    """从 conversation.md 中提取第一条用户消息作为任务标题；若无则尝试 checkpoint"""
+    text = ""
+    conv_path = work_dir / "conversation.md"
+    if conv_path.exists():
+        text = conv_path.read_text(encoding="utf-8")[:2000]
+
+    # conversation.md 为空时，从 checkpoint 中的 user 消息重建第一条查询
+    if not text.strip():
+        cp_path = work_dir / "checkpoint.json"
+        if cp_path.exists():
+            try:
+                cp_data = json.loads(cp_path.read_text(encoding="utf-8"))
+                history = _extract_history_messages(cp_data)
+                for m in history:
+                    if m.get("role") == "user" and m.get("content"):
+                        text = m["content"]
+                        break
+            except Exception:
+                pass
+
+    if not text:
+        return ""
+
+    # 优先解析 conversation.md 格式：找到 "**用户：**" 后的内容
+    lines = text.splitlines()
+    found_user = False
+    query_lines = []
+    for line in lines:
+        line = line.strip()
+        if line == "**用户：**":
+            found_user = True
+            continue
+        if found_user:
+            if line.startswith("**") and "用户" not in line:
+                break
+            if line and not line.startswith("##"):
+                query_lines.append(line)
+            if line.startswith("##"):
+                break
+
+    query = " ".join(query_lines).strip()
+
+    # 如果不是 conversation.md 格式，直接使用原始文本
+    if not query:
+        query = text.strip()
+
+    # 清理 markdown 标记
+    query = re.sub(r"\*+", "", query)
+
+    # 如果内容是系统注入的任务列表，提取第一个任务里的研究对象
+    if query.startswith("[你的任务列表]"):
+        # 取第一个任务项
+        for line in query.splitlines():
+            line = line.strip()
+            # 去掉列表标记：- [ ] 1.
+            m = re.search(r"[:：]\s*(.+?)(?:起源|发展历程|竞品|特点|行业环境|管理层|撰写|生成|$)", line)
+            if m:
+                candidate = m.group(1).strip()
+                if candidate:
+                    query = candidate
+                    break
+        else:
+            # 兜底：取第一行
+            query = query.splitlines()[0] if query.splitlines() else ""
+
+    # 去掉常见的任务列表前缀
+    query = re.sub(r"^\s*[-*\d\[\]\.\s]+", "", query)
+    query = re.sub(r"\s+", " ", query).strip()
+    return query[:60] if query else ""
+
+
+def _save_task_title(work_dir: Path, title: str) -> bool:
+    """保存用户自定义任务标题到 meta.json"""
+    try:
+        work_dir.mkdir(parents=True, exist_ok=True)
+        meta_path = work_dir / "meta.json"
+        meta = {}
+        if meta_path.exists():
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta["title"] = title.strip()[:60]
+        meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+        return True
+    except Exception as e:
+        logger.warning(f"保存任务标题失败: {e}")
+        return False
+
+
 def _build_task_detail(work_dir: Path, timestamp: float = None) -> Optional[dict]:
     """从任务工作目录构建任务详情（供 latest_task 和 task_detail 复用）"""
     if not work_dir.exists():
@@ -878,19 +1023,20 @@ def _build_task_detail(work_dir: Path, timestamp: float = None) -> Optional[dict
             result_preview = result_file.read_text(encoding="utf-8")
 
         # 如果 result.md 只是简短状态，尝试用工作目录中最大的 .md 文件作为展示源
-        md_files = [p for p in work_dir.rglob("*.md") if p.is_file() and p.name != "result.md"]
+        md_files = [p for p in work_dir.rglob("*.md") if p.is_file() and p.name not in {"result.md", "conversation.md"}]
         if len(result_preview.strip()) < 300 and md_files:
             md_files.sort(key=lambda p: p.stat().st_size, reverse=True)
             result_file = md_files[0]
             result_preview = result_file.read_text(encoding="utf-8")
 
         # 任务标题
-        task_title = _extract_task_title(result_file) or work_dir.name
+        task_title = _get_task_title(work_dir)
 
-        # 产出文件
+        # 产出文件：排除已在对话/结果区展示的文件
+        excluded_files = {"conversation.md", "result.md"}
         files = []
         for p in work_dir.rglob("*"):
-            if p.is_file() and p.stat().st_size > 100:
+            if p.is_file() and p.stat().st_size > 100 and p.name not in excluded_files:
                 suffix = p.suffix.lower()
                 if suffix in (".pdf", ".png", ".jpg", ".jpeg", ".mp3", ".mp4", ".docx", ".pptx", ".md"):
                     rel = str(p.relative_to(DATA_DIR_ABS))
@@ -901,6 +1047,20 @@ def _build_task_detail(work_dir: Path, timestamp: float = None) -> Optional[dict
         conv_file = work_dir / "conversation.md"
         if conv_file.exists():
             conversation = conv_file.read_text(encoding="utf-8")[:5000]
+
+        # 如果 conversation.md 为空，尝试从 checkpoint 中的 user/assistant 消息重建
+        if not conversation.strip() and cp.exists():
+            try:
+                cp_data = json.loads(cp.read_text(encoding="utf-8"))
+                history = _extract_history_messages(cp_data)
+                if history:
+                    parts = []
+                    for m in history:
+                        role_label = "用户" if m["role"] == "user" else "销销"
+                        parts.append(f"**{role_label}：**\n{m['content']}\n")
+                    conversation = "\n---\n\n".join(parts)[:5000]
+            except Exception as e:
+                logger.warning(f"从 checkpoint 重建对话失败: {e}")
 
         return {
             "id": work_dir.name,
@@ -979,6 +1139,26 @@ def delete_task(task_id: str = ""):
         return {"success": False, "error": str(e)}
 
 
+@app.post("/api/rename_task")
+def rename_task(task_id: str = "", title: str = ""):
+    """重命名任务标题（保存到 meta.json）"""
+    if not task_id or not title.strip():
+        return {"success": False, "error": "缺少 task_id 或 title"}
+    if ".." in task_id or "/" in task_id or "\\" in task_id:
+        return {"success": False, "error": "非法 task_id"}
+    work_dir = Path(DATA_DIR_ABS) / "tasks" / task_id
+    if not work_dir.exists() or not work_dir.is_dir():
+        return {"success": False, "error": "任务不存在"}
+    try:
+        if not str(work_dir.resolve()).startswith(str(Path(DATA_DIR_ABS).resolve() / "tasks")):
+            return {"success": False, "error": "非法路径"}
+    except Exception:
+        return {"success": False, "error": "路径解析失败"}
+    if _save_task_title(work_dir, title):
+        return {"success": True, "title": title.strip()[:60]}
+    return {"success": False, "error": "保存失败"}
+
+
 @app.post("/api/new_thread")
 def new_thread(user_id: str = ""):
     """强制创建新对话线程，用于 Web UI 的'新建任务'按钮"""
@@ -1016,7 +1196,7 @@ def task_history(user_id: str = "", limit: int = 10):
             if user_id in d.name or d.name.startswith("x-"):
                 cp = d / "checkpoint.json"
                 mtime = cp.stat().st_mtime if cp.exists() else d.stat().st_mtime
-                title = _extract_task_title(d / "result.md") or d.name
+                title = _get_task_title(d)
                 matched.append({
                     "id": d.name,
                     "title": title,
@@ -1174,7 +1354,8 @@ CHAT_HTML = '''<!DOCTYPE html>
         .task-item:hover { background: #f0f0f5; }
         .task-item.active { background: #e5f2ff; border-color: #007aff; }
         .task-item-info { flex: 1; min-width: 0; }
-        .task-item-title { font-weight: 600; color: #1c1c1e; margin-bottom: 2px; font-size: 13px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .task-item-title { font-weight: 600; color: #1c1c1e; margin-bottom: 2px; font-size: 13px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; cursor: pointer; }
+        .task-item-title:hover { color: #b45f3c; }
         .task-item-id { color: #8e8e93; font-size: 11px; margin-bottom: 2px; }
         .task-item-meta { color: #8e8e93; font-size: 11px; }
         .task-item-delete {
@@ -2072,11 +2253,15 @@ CHAT_HTML = '''<!DOCTYPE html>
             }
             currentTaskPanel.innerHTML = `
                 <div class="task-item active">
-                    <div class="task-item-title">${escapeHtml(task.title || task.id)}</div>
+                    <div class="task-item-title" data-task-id="${escapeHtml(task.id)}" data-title="${escapeHtml(task.title || task.id)}">${escapeHtml(task.title || task.id)}</div>
                     <div class="task-item-id">${escapeHtml(task.id)}</div>
                     <div class="task-item-meta">迭代 ${task.iteration} · ${formatTime(task.timestamp)}</div>
                 </div>
             `;
+            const currentTitleEl = currentTaskPanel.querySelector(".task-item-title");
+            if (currentTitleEl) {
+                makeEditableTitle(currentTitleEl, task.id, task.title || task.id);
+            }
             summaryStatus.textContent = `${task.title || task.id} · 迭代 ${task.iteration}`;
 
             summaryFiles.innerHTML = "";
@@ -2145,12 +2330,16 @@ CHAT_HTML = '''<!DOCTYPE html>
                     item.title = escapeHtml(t.title || t.id);
                     item.innerHTML = `
                         <div class="task-item-info">
-                            <div class="task-item-title">${escapeHtml(t.title || t.id)}</div>
+                            <div class="task-item-title" data-task-id="${escapeHtml(t.id)}" data-title="${escapeHtml(t.title || t.id)}">${escapeHtml(t.title || t.id)}</div>
                             <div class="task-item-id">${escapeHtml(t.id)}</div>
                             <div class="task-item-meta">${formatTime(t.mtime)}</div>
                         </div>
                         <button class="task-item-delete" title="删除">×</button>
                     `;
+                    const titleEl = item.querySelector(".task-item-title");
+                    if (titleEl) {
+                        makeEditableTitle(titleEl, t.id, t.title || t.id);
+                    }
                     item.querySelector(".task-item-info").addEventListener("click", () => loadTaskDetail(t.id));
                     item.querySelector(".task-item-delete").addEventListener("click", (e) => {
                         e.stopPropagation();
@@ -2181,6 +2370,65 @@ CHAT_HTML = '''<!DOCTYPE html>
             } catch (e) {
                 console.error("删除任务失败:", e);
             }
+        }
+
+        async function renameTask(taskId, newTitle, onSuccess) {
+            if (!newTitle.trim()) return;
+            try {
+                const res = await fetch(`/api/rename_task?task_id=${encodeURIComponent(taskId)}&title=${encodeURIComponent(newTitle.trim())}`, { method: "POST" });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.success) {
+                    if (onSuccess) onSuccess(data.title);
+                    loadTaskHistory();
+                    // 如果重命名的是当前任务，刷新当前展示
+                    if (summaryStatus.textContent.includes(taskId)) {
+                        pollTask();
+                    }
+                } else {
+                    alert("重命名失败：" + (data.error || "未知错误"));
+                }
+            } catch (e) {
+                console.error("重命名任务失败:", e);
+            }
+        }
+
+        function makeEditableTitle(element, taskId, currentTitle) {
+            element.addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (element.querySelector("input")) return;
+                const input = document.createElement("input");
+                input.type = "text";
+                input.value = currentTitle;
+                input.className = "task-title-input";
+                input.style.cssText = "width:100%;font-size:inherit;font-weight:inherit;border:1px solid #d4a574;border-radius:4px;padding:2px 4px;background:#fff;";
+                element.innerHTML = "";
+                element.appendChild(input);
+                input.focus();
+                input.select();
+
+                const finish = () => {
+                    const newTitle = input.value.trim() || currentTitle;
+                    element.innerHTML = escapeHtml(newTitle);
+                    if (newTitle !== currentTitle) {
+                        renameTask(taskId, newTitle, (savedTitle) => {
+                            currentTitle = savedTitle;
+                            element.innerHTML = escapeHtml(savedTitle);
+                        });
+                    }
+                };
+
+                input.addEventListener("blur", finish);
+                input.addEventListener("keydown", (ev) => {
+                    if (ev.key === "Enter") {
+                        ev.preventDefault();
+                        input.blur();
+                    } else if (ev.key === "Escape") {
+                        input.value = currentTitle;
+                        input.blur();
+                    }
+                });
+            });
         }
 
         async function loadTaskDetail(taskId) {
@@ -2214,11 +2462,18 @@ CHAT_HTML = '''<!DOCTYPE html>
 
             ws.onopen = () => {
                 setConnectionStatus("connected");
+                currentStatus = null;
+                streamingMsg = null;
                 messageInput.focus();
+                // 连接成功后发送握手，服务端据此恢复历史对话
+                const userId = userSelect.value || "web_user";
+                ws.send(JSON.stringify({ user_id: userId, action: "hello" }));
             };
 
             ws.onclose = () => {
                 setConnectionStatus("disconnected");
+                if (currentStatus) { currentStatus.remove(); currentStatus = null; }
+                streamingMsg = null;
                 if (!reconnectTimer) {
                     reconnectTimer = setTimeout(() => {
                         reconnectTimer = null;
@@ -2255,6 +2510,16 @@ CHAT_HTML = '''<!DOCTYPE html>
                 } else if (data.type === "event") {
                     if (!currentStatus) currentStatus = append(data.message || "处理中…", "status");
                     else currentStatus.textContent = data.message || "处理中…";
+                } else if (data.type === "history") {
+                    // 恢复历史对话到聊天框
+                    if (data.hint) {
+                        append(`<em style="color:#888">${escapeHtml(data.hint)}</em>`, "status");
+                    }
+                    (data.messages || []).forEach(m => {
+                        const cls = m.role === "user" ? "user" : "agent";
+                        append(escapeHtml(m.content).replace(/\\n/g, "<br>"), cls);
+                    });
+                    chat.scrollTop = chat.scrollHeight;
                 } else if (data.type === "token") {
                     ensureStreamingAgent().textContent += data.content;
                     chat.scrollTop = chat.scrollHeight;
@@ -2407,6 +2672,7 @@ CHAT_HTML = '''<!DOCTYPE html>
         let floatCurrentStatus = null;
         let floatStreamingMsg = null;
         let floatReconnectTimer = null;
+        let floatHistorySent = false;
         let floatUnread = 0;
 
         function appendMini(text, cls = "agent") {
@@ -2439,10 +2705,16 @@ CHAT_HTML = '''<!DOCTYPE html>
             wsFloat = new WebSocket(`${wsProtocol}//${location.host}/ws/chat`);
 
             wsFloat.onopen = () => {
+                floatCurrentStatus = null;
+                floatStreamingMsg = null;
                 appendMini("已连接，可以继续聊天", "status");
+                const userId = userSelect.value || "web_user";
+                wsFloat.send(JSON.stringify({ user_id: userId, action: "hello" }));
             };
 
             wsFloat.onclose = () => {
+                if (floatCurrentStatus) { floatCurrentStatus.remove(); floatCurrentStatus = null; }
+                floatStreamingMsg = null;
                 appendMini("连接已断开，正在重连…", "status");
                 if (!floatReconnectTimer) {
                     floatReconnectTimer = setTimeout(() => {
@@ -2476,6 +2748,13 @@ CHAT_HTML = '''<!DOCTYPE html>
                 if (data.type === "status" || data.type === "event") {
                     if (!floatCurrentStatus) floatCurrentStatus = appendMini(data.message || "处理中…", "status");
                     else floatCurrentStatus.textContent = data.message || "处理中…";
+                } else if (data.type === "history") {
+                    if (data.hint) appendMini(`<em style="color:#888">${escapeHtml(data.hint)}</em>`, "status");
+                    (data.messages || []).forEach(m => {
+                        const cls = m.role === "user" ? "user" : "agent";
+                        appendMini(escapeHtml(m.content).replace(/\\n/g, "<br>"), cls);
+                    });
+                    floatingChatMessages.scrollTop = floatingChatMessages.scrollHeight;
                 } else if (data.type === "token") {
                     ensureFloatStreamingAgent().textContent += data.content;
                     floatingChatMessages.scrollTop = floatingChatMessages.scrollHeight;
@@ -2544,6 +2823,11 @@ CHAT_HTML = '''<!DOCTYPE html>
         loadUsers().then(() => {
             pollTask();
             loadTaskHistory();
+            // 用户列表加载完成后，如果 WebSocket 已连接，补发握手恢复历史
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const userId = userSelect.value || "web_user";
+                ws.send(JSON.stringify({ user_id: userId, action: "hello" }));
+            }
         });
         connect();
         setInterval(pollTask, 3000);
@@ -2739,6 +3023,7 @@ async def websocket_chat(ws: WebSocket):
     await ws.accept()
     loop = asyncio.get_event_loop()
     disconnected = False
+    history_sent = False
 
     async def safe_send_json(data: dict):
         nonlocal disconnected
@@ -2748,6 +3033,21 @@ async def websocket_chat(ws: WebSocket):
             await ws.send_json(data)
         except Exception:
             disconnected = True
+
+    async def maybe_send_history(user_id: str):
+        nonlocal history_sent
+        if history_sent:
+            return
+        history_sent = True
+        cp = _load_user_checkpoint(user_id)
+        if cp:
+            history = _extract_history_messages(cp)
+            if history:
+                await safe_send_json({
+                    "type": "history",
+                    "messages": history,
+                    "hint": "检测到您有未完成的任务，已恢复历史对话，继续发送消息即可接着进行。",
+                })
 
     def event_sink(event: AgentEvent):
         if disconnected:
@@ -2782,34 +3082,53 @@ async def websocket_chat(ws: WebSocket):
                     await safe_send_json({"type": "status", "message": "当前没有正在运行的任务"})
                 continue
 
+            if action == "hello":
+                await maybe_send_history(user_id)
+                continue
+
             message = data.get("message", "").strip()
             if not message:
                 await safe_send_json({"type": "error", "message": "消息不能为空"})
                 continue
 
-            # 为当前用户创建取消信号
-            cancel_event = threading.Event()
-            active_cancel_events[user_id] = cancel_event
-
-            await safe_send_json({"type": "status", "message": "销销正在思考…"})
-
+            # 同一用户串行处理，避免并发 run 互相覆盖 checkpoint/cancel_event
+            user_lock = _get_user_lock(user_id)
+            await run_in_threadpool(user_lock.acquire)
             try:
-                result = await run_in_threadpool(
-                    process_query, user_id, message,
-                    event_sink=event_sink, cancel_event=cancel_event
-                )
+                # 首次发消息时，如果有未完成的 checkpoint，先把历史对话推到前端
+                await maybe_send_history(user_id)
 
-                await safe_send_json({
-                    "type": "result",
-                    "reply": result.get("reply", ""),
-                    "files": result.get("files", []),
-                    "found_files": result.get("found_files", []),
-                })
+                # 为当前用户创建取消信号
+                cancel_event = threading.Event()
+                active_cancel_events[user_id] = cancel_event
+
+                await safe_send_json({"type": "status", "message": "销销正在思考…"})
+
+                try:
+                    result = await run_in_threadpool(
+                        process_query, user_id, message,
+                        event_sink=event_sink, cancel_event=cancel_event
+                    )
+
+                    await safe_send_json({
+                        "type": "result",
+                        "reply": result.get("reply", ""),
+                        "files": result.get("files", []),
+                        "found_files": result.get("found_files", []),
+                    })
+                finally:
+                    active_cancel_events.pop(user_id, None)
             finally:
-                active_cancel_events.pop(user_id, None)
+                user_lock.release()
     except WebSocketDisconnect:
         disconnected = True
         logger.info("Web 聊天连接断开")
+    except RuntimeError as e:
+        disconnected = True
+        if "not connected" in str(e).lower() or "accept" in str(e).lower():
+            logger.info("Web 聊天连接已关闭")
+        else:
+            logger.error(f"Web 聊天异常: {e}", exc_info=True)
     except Exception as e:
         disconnected = True
         logger.error(f"Web 聊天异常: {e}", exc_info=True)

@@ -476,7 +476,7 @@ class ToolRegistry:
                 }, "required": ["tasks"]}
             },
             "md_to_pdf": {
-                "description": "将工作目录中的 Markdown 文件转换为 PDF 报告。自动处理中文字体、标题层级、列表和表格。输出文件与原文件同名，扩展名改为 .pdf。",
+                "description": "将工作目录中的 Markdown 文件转换为 PDF 报告。调用后立即返回，PDF 在后台线程中生成，完成后自动出现在产出文件区。自动处理中文字体、标题层级、列表和表格。输出文件与原文件同名，扩展名改为 .pdf。",
                 "parameters": {"type": "object", "properties": {
                     "path": {"type": "string", "description": "工作目录内的 Markdown 文件相对路径（如 report.md）"},
                     "title": {"type": "string", "description": "PDF 封面标题，默认从文件内容提取"}
@@ -485,7 +485,7 @@ class ToolRegistry:
             "query_peistock": {
                 "description": "查询 peistock 股票数据（价格、指标、B/S信号）。必须传入 code 参数（如 600519、00700）。",
                 "parameters": {"type": "object", "properties": {
-                    "endpoint": {"type": "string", "description": "接口类型：stock（单股查询，默认）| signals（最新信号）| watchlist（股票池）| scan（批量扫描）| health（服务健康）", "default": "stock"},
+                    "endpoint": {"type": "string", "description": "接口类型：stock（单股查询，默认）| signals（最新信号）| watchlist（股票池）| scan（批量扫描）| health（服务状态）", "default": "stock"},
                     "code": {"type": "string", "description": "股票代码（如 600519、00700）。endpoint=stock 时必填"},
                     "codes": {"type": "array", "items": {"type": "string"}, "description": "股票代码列表（endpoint=scan 时使用）"}
                 }, "required": ["code"]}

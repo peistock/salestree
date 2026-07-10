@@ -11,6 +11,7 @@
 import os
 import time
 import json
+import uuid
 import logging
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
@@ -118,8 +119,21 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_overrides_user_status
             ON overrides(user_id, status, priority DESC);
         """)
+        # 兼容旧表名：若存在 couple_notifications 则重命名为 notifications
         c.execute("""
-            CREATE TABLE IF NOT EXISTS couple_notifications (
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.tables
+                           WHERE table_schema='public' AND table_name='couple_notifications')
+                    AND NOT EXISTS (SELECT 1 FROM information_schema.tables
+                                    WHERE table_schema='public' AND table_name='notifications')
+                THEN
+                    ALTER TABLE couple_notifications RENAME TO notifications;
+                END IF;
+            END $$;
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
                 id SERIAL PRIMARY KEY,
                 user_id TEXT,
                 type TEXT NOT NULL,
@@ -131,7 +145,7 @@ def init_db():
         """)
         c.execute("""
             CREATE INDEX IF NOT EXISTS idx_notifications_user_read
-            ON couple_notifications(user_id, is_read, created_at DESC);
+            ON notifications(user_id, is_read, created_at DESC);
         """)
         # 销售管理表
         c.execute("""
@@ -224,6 +238,22 @@ def init_db():
         """)
         c.execute("""
             CREATE INDEX IF NOT EXISTS idx_activities_owner ON activities(owner_id, created_at DESC);
+        """
+        )
+        # Todo 持久化表
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS todos (
+                id SERIAL PRIMARY KEY,
+                store_key TEXT UNIQUE NOT NULL,
+                user_id TEXT NOT NULL,
+                todos_json JSONB NOT NULL DEFAULT '[]',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        c.execute("""
+            CREATE INDEX IF NOT EXISTS idx_todos_user
+            ON todos(user_id, updated_at DESC);
         """)
     conn.commit()
     conn.close()
@@ -318,9 +348,9 @@ class Memory:
         """L2 个人画像（OpenViking 8 类 Memory 组织）"""
         with self.conn.cursor(cursor_factory=RealDictCursor) as c:
             c.execute(
-                """SELECT name, role, preferences, health_notes,
+                """SELECT name, role, preferences,
                           interests, current_projects, communication_style,
-                          life_experiences, family_circle, writing_patterns
+                          life_experiences, writing_patterns
                    FROM user_profiles WHERE user_id=%s""",
                 (self.user_id,)
             )
@@ -338,20 +368,7 @@ class Memory:
             if prefs and prefs != "无":
                 parts.append(f"【偏好】{prefs}。")
 
-            # 3. Entities — 实体记忆（关系网络 + 关键信息）
-            family = row.get("family_circle") or {}
-            if isinstance(family, str):
-                try:
-                    family = json.loads(family)
-                except Exception:
-                    family = {}
-            if family:
-                rels = [f"{k}={v}" for k, v in family.items()]
-                parts.append(f"【实体-关系】{', '.join(rels)}。")
-            if row.get("health_notes") and row["health_notes"] != "无":
-                parts.append(f"【实体-备注】{row['health_notes']}。")
-
-            # 4. Events — 事件记录（从最近摘要中提取）
+            # 3. Events — 事件记录（从最近摘要中提取）
             with self.conn.cursor(cursor_factory=RealDictCursor) as c2:
                 c2.execute(
                     """SELECT summary_text, summary_type FROM memory_summaries
@@ -363,7 +380,7 @@ class Memory:
                     events = [f"[{r['summary_type']}] {r['summary_text'][:80]}" for r in event_rows]
                     parts.append(f"【事件】{'；'.join(events)}。")
 
-            # 5. Cases — 交互案例
+            # 4. Cases — 交互案例
             style = row.get("communication_style") or {}
             if isinstance(style, str):
                 try:
@@ -375,7 +392,7 @@ class Memory:
                 case_texts = [c.get("case", "")[:40] for c in cases[-3:]]
                 parts.append(f"【案例】{'；'.join(case_texts)}。")
 
-            # 6. Patterns — 模式（文风 + 沟通风格）
+            # 5. Patterns — 模式（文风 + 沟通风格）
             writing = row.get("writing_patterns") or {}
             if isinstance(writing, str):
                 try:
@@ -396,13 +413,13 @@ class Memory:
                 if style.get("verbosity"):
                     parts.append(f"【模式-沟通】喜欢{style['verbosity']}的回复")
 
-            # 7. Tools — 工具知识
+            # 6. Tools — 工具知识
             tools = style.get("tool_knowledge", []) if isinstance(style, dict) else []
             if tools:
                 tool_notes = [t.get("note", "")[:30] for t in tools[-3:]]
                 parts.append(f"【工具】{'；'.join(tool_notes)}。")
 
-            # 8. Skills — 技能/创作项目
+            # 7. Skills — 技能/创作项目
             projects = row.get("current_projects") or []
             if isinstance(projects, str):
                 try:
@@ -567,7 +584,7 @@ class Memory:
             return dict(row) if row else {}
 
     def workspace_write(self, project_name: str, content: str,
-                        project_type: str = "autobiography",
+                        project_type: str = "draft",
                         status: str = "drafting",
                         style_preset: dict = None,
                         source_material: dict = None,
@@ -649,13 +666,13 @@ class Memory:
             except Exception:
                 pass
 
-        # 2. 加载 family 通用 skill
+        # 2. 加载通用 skill
         for fname in os.listdir(skills_dir):
             if not fname.endswith(".md"):
                 continue
             if fname == "skill_index.md":
                 continue
-            if "通用" in fname or "family" in fname.lower():
+            if "通用" in fname:
                 fpath = os.path.join(skills_dir, fname)
                 try:
                     with open(fpath, "r", encoding="utf-8") as f:
@@ -701,7 +718,7 @@ class Memory:
             return ""
 
     def load_skills_by_category(self, category: str, max_chars: int = 1500) -> str:
-        """按分类加载 skills（creation/info/expression/social/health）"""
+        """按分类加载 skills（creation/info/expression/social/world）"""
         skills_dir = os.path.join(os.getenv("DATA_DIR", "./data"), "skills")
         cat_dir = os.path.join(skills_dir, category)
         if not os.path.exists(cat_dir):
@@ -908,7 +925,7 @@ class Memory:
             if old_row:
                 self._summarize_and_archive(old_row["thread_id"])
 
-            thread_id = f"{user_id}_{int(time.time())}"
+            thread_id = f"{user_id}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
             c.execute(
                 "INSERT INTO conversation_threads (thread_id, user_id) VALUES (%s, %s)",
                 (thread_id, user_id)
@@ -933,7 +950,7 @@ class Memory:
             if old_row:
                 self._summarize_and_archive(old_row["thread_id"])
 
-            thread_id = f"{user_id}_{int(time.time())}"
+            thread_id = f"{user_id}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
             c.execute(
                 "INSERT INTO conversation_threads (thread_id, user_id) VALUES (%s, %s)",
                 (thread_id, user_id)
@@ -1205,14 +1222,14 @@ class Memory:
 
     def update_profile_field(self, field: str, value):
         """更新用户画像字段（支持 JSONB 和 TEXT）"""
-        allowed = {"preferences", "health_notes", "interests", "current_projects",
-                   "communication_style", "life_experiences", "family_circle"}
+        allowed = {"preferences", "interests", "current_projects",
+                   "communication_style", "life_experiences"}
         if field not in allowed:
             logger.warning(f"不允许更新的字段: {field}")
             return
 
         with self.conn.cursor() as c:
-            if field in ("interests", "current_projects", "communication_style", "family_circle"):
+            if field in ("interests", "current_projects", "communication_style"):
                 # JSONB 字段
                 if isinstance(value, (list, dict)):
                     value = json.dumps(value, ensure_ascii=False)
@@ -1274,31 +1291,26 @@ class Memory:
                     self.update_profile_field("current_projects", projects[:5])
                 updated = True
 
-            # 3. 提取健康信息（entities — 身体实体）
-            health_keywords = ["病", "药", "健康", "血压", "血糖", "医院", "体检"]
-            if any(k in lower for k in health_keywords):
-                self.update_profile_field("health_notes", summary[:500])
-                updated = True
-
-            # 4. 提取人际关系（entities — 关系实体）
-            family_keywords = ["儿子", "女儿", "孙子", "孙女", "外孙", "老公", "老婆", "妻子", "丈夫"]
-            if any(k in lower for k in family_keywords):
+            # 3. 提取创作项目（patterns/skills）
+            project_keywords = ["整理", "写", "创作", "做", "编辑", "制作", "绘本", "自传", "朋友圈", "文案"]
+            if any(k in lower for k in project_keywords):
                 with self.conn.cursor() as c:
-                    c.execute("SELECT family_circle FROM user_profiles WHERE user_id=%s", (self.user_id,))
+                    c.execute("SELECT current_projects FROM user_profiles WHERE user_id=%s", (self.user_id,))
                     row = c.fetchone()
-                    circle = {}
+                    projects = []
                     if row and row[0]:
                         try:
-                            circle = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+                            projects = json.loads(row[0]) if isinstance(row[0], str) else row[0]
                         except Exception:
-                            circle = {}
-                    if not isinstance(circle, dict):
-                        circle = {}
-                    circle["note"] = summary[:200]
-                    self.update_profile_field("family_circle", circle)
+                            projects = []
+                    if not isinstance(projects, list):
+                        projects = []
+                    new_project = {"name": summary[:50], "status": "进行中", "last_update": datetime.now().strftime("%Y-%m-%d")}
+                    projects.append(new_project)
+                    self.update_profile_field("current_projects", projects[:5])
                 updated = True
 
-            # 5. 提取交互案例（cases — 新增）
+            # 4. 提取交互案例（cases — 新增）
             case_keywords = ["例子", "案例", "情况", "时候", "曾经", "上次", "有一次"]
             if any(k in lower for k in case_keywords):
                 with self.conn.cursor() as c:
@@ -1320,7 +1332,7 @@ class Memory:
                     self.update_profile_field("communication_style", style)
                 updated = True
 
-            # 6. 提取工具知识（tools — 新增）
+            # 5. 提取工具知识（tools — 新增）
             tool_keywords = ["用", "工具", "软件", "app", "小程序", "公众号", "怎么操作", "怎么用"]
             if any(k in lower for k in tool_keywords):
                 with self.conn.cursor() as c:
@@ -1359,7 +1371,7 @@ class Memory:
 # ========== Phase 4：外挂大脑查询接口 ==========
 
 def get_active_briefings(user_id: str, effective_date=None) -> List[dict]:
-    """获取某老人今日 active 的 briefings"""
+    """获取某用户今日 active 的 briefings"""
     from datetime import date
     if effective_date is None:
         effective_date = date.today()
@@ -1381,7 +1393,7 @@ def get_active_briefings(user_id: str, effective_date=None) -> List[dict]:
 
 
 def get_pending_overrides(user_id: str) -> List[dict]:
-    """获取某老人的 pending overrides，按优先级排序"""
+    """获取某用户的 pending overrides，按优先级排序"""
     conn = get_conn()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as c:
@@ -1416,14 +1428,14 @@ def mark_override_applied(override_id: int):
         conn.close()
 
 
-def save_couple_notification(user_id: str, type_: str, title: str, content: str) -> int:
-    """保存一条夫妻通知，返回通知 ID"""
+def save_notification(user_id: str, type_: str, title: str, content: str) -> int:
+    """保存一条通知，返回通知 ID"""
     conn = get_conn()
     try:
         with conn.cursor() as c:
             c.execute(
                 """
-                INSERT INTO couple_notifications (user_id, type, title, content)
+                INSERT INTO notifications (user_id, type, title, content)
                 VALUES (%s, %s, %s, %s)
                 RETURNING id
                 """,
@@ -1437,13 +1449,13 @@ def save_couple_notification(user_id: str, type_: str, title: str, content: str)
 
 
 def get_notifications(user_id: str = None, unread_only: bool = False, limit: int = 50) -> List[dict]:
-    """获取夫妻通知列表"""
+    """获取通知列表"""
     conn = get_conn()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as c:
             sql = """
                 SELECT id, user_id, type, title, content, is_read, created_at
-                FROM couple_notifications
+                FROM notifications
                 WHERE 1=1
             """
             params = []
@@ -1466,7 +1478,7 @@ def mark_notification_read(notification_id: int):
     try:
         with conn.cursor() as c:
             c.execute(
-                "UPDATE couple_notifications SET is_read=TRUE WHERE id=%s",
+                "UPDATE notifications SET is_read=TRUE WHERE id=%s",
                 (notification_id,)
             )
             conn.commit()
@@ -1489,26 +1501,109 @@ def delete_episodic_memory(memory_id: int) -> bool:
         conn.close()
 
 
-def get_elderly_users() -> List[dict]:
-    """获取所有长辈用户（dashboard 用）"""
+def save_todos(store_key: str, user_id: str, todos: List[Dict]) -> bool:
+    """持久化 todo 列表到数据库"""
+    import json as _json
+    conn = get_conn()
+    try:
+        with conn.cursor() as c:
+            c.execute(
+                """
+                INSERT INTO todos (store_key, user_id, todos_json, updated_at)
+                VALUES (%s, %s, %s::jsonb, CURRENT_TIMESTAMP)
+                ON CONFLICT (store_key) DO UPDATE SET
+                    todos_json = EXCLUDED.todos_json,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (store_key, user_id, _json.dumps(todos, ensure_ascii=False))
+            )
+            conn.commit()
+            return True
+    except Exception as e:
+        logger.error(f"保存 todos 失败: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def load_todos(store_key: str) -> List[Dict]:
+    """从数据库加载 todo 列表"""
+    conn = get_conn()
+    try:
+        with conn.cursor() as c:
+            c.execute(
+                "SELECT todos_json FROM todos WHERE store_key=%s",
+                (store_key,)
+            )
+            row = c.fetchone()
+            if row:
+                value = row[0]
+                if isinstance(value, str):
+                    return json.loads(value)
+                return value or []
+            return []
+    except Exception as e:
+        logger.error(f"加载 todos 失败: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def list_pending_todos(user_id: str, limit: int = 20) -> List[Dict]:
+    """获取某用户最近的待办事项（按 store_key 分组）"""
     conn = get_conn()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as c:
             c.execute(
-                "SELECT user_id, name, role FROM user_profiles WHERE role='长辈' ORDER BY name"
+                """
+                SELECT store_key, todos_json, updated_at
+                FROM todos
+                WHERE user_id=%s
+                ORDER BY updated_at DESC
+                LIMIT %s
+                """,
+                (user_id, limit)
+            )
+            rows = c.fetchall()
+            result = []
+            for r in rows:
+                value = r["todos_json"]
+                todos = json.loads(value) if isinstance(value, str) else (value or [])
+                active = [t for t in todos if t.get("status") in ("pending", "in_progress")]
+                if active:
+                    result.append({
+                        "store_key": r["store_key"],
+                        "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+                        "todos": active,
+                    })
+            return result
+    except Exception as e:
+        logger.error(f"列出待办 todos 失败: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def get_sales_users() -> List[dict]:
+    """获取所有销售用户（dashboard/scheduler 用）"""
+    conn = get_conn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as c:
+            c.execute(
+                "SELECT user_id, name, role FROM user_profiles WHERE entity_type='sales' ORDER BY name"
             )
             return c.fetchall()
     finally:
         conn.close()
 
 
-def get_couple_users() -> List[dict]:
-    """获取所有夫妻用户（dashboard 用）"""
+def get_all_users() -> List[dict]:
+    """获取所有用户（dashboard 用）"""
     conn = get_conn()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as c:
             c.execute(
-                "SELECT user_id, name FROM user_profiles WHERE role='夫妻' ORDER BY name"
+                "SELECT user_id, name, role FROM user_profiles ORDER BY name"
             )
             return c.fetchall()
     finally:
@@ -1522,9 +1617,9 @@ def get_user_profile(user_id: str) -> dict:
         with conn.cursor(cursor_factory=RealDictCursor) as c:
             c.execute(
                 """
-                SELECT user_id, name, role, preferences, health_notes,
+                SELECT user_id, name, role, preferences,
                        interests, current_projects, communication_style,
-                       life_experiences, family_circle, writing_patterns,
+                       life_experiences, writing_patterns,
                        created_at, updated_at
                 FROM user_profiles WHERE user_id=%s
                 """,

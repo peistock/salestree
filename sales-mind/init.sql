@@ -230,7 +230,7 @@ CREATE TABLE IF NOT EXISTS overrides (
 CREATE INDEX IF NOT EXISTS idx_overrides_user_status ON overrides(user_id, status, priority DESC);
 
 -- 通知队列（销售日报 + 警报）
-CREATE TABLE IF NOT EXISTS couple_notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id SERIAL PRIMARY KEY,
     user_id TEXT,
     type TEXT NOT NULL,
@@ -239,7 +239,7 @@ CREATE TABLE IF NOT EXISTS couple_notifications (
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON couple_notifications(user_id, is_read, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at DESC);
 
 -- 初始化销售人员与示例客户数据
 INSERT INTO user_profiles (user_id, name, role, preferences, entity_type, team_id) VALUES

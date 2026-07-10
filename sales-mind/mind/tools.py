@@ -10,8 +10,10 @@ import urllib.request
 import urllib.error
 import subprocess
 import shlex
+import threading
 from pathlib import Path
 from typing import List, Dict, Optional
+from datetime import datetime
 import logging
 
 from psycopg2.extras import RealDictCursor
@@ -22,6 +24,10 @@ logger = logging.getLogger(__name__)
 WORK_DIR = Path(os.getenv("DATA_DIR", "./data"))
 KNOWLEDGE_DIR = WORK_DIR / "knowledge"
 KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
+
+# 后台 PDF 生成任务状态（path -> dict）
+_pdf_jobs: Dict[str, dict] = {}
+_pdf_jobs_lock = threading.Lock()
 
 
 def _searxng_search_url() -> str:
@@ -171,17 +177,52 @@ class Toolkit:
 
     @tool(name="md_to_pdf", domain="creation", category="io", local_only=True, timeout=30)
     def md_to_pdf(self, path: str, title: str = "") -> str:
-        """将 Markdown 文件转换为 PDF，优先使用 WeasyPrint（带完整CSS样式），回退到 fpdf2。"""
+        """将 Markdown 文件转换为 PDF，后台异步执行，不阻塞 Agent 循环。"""
         path = self._normalize_path(path)
         md_path = self.work_dir / path
         if not md_path.exists():
             return f"文件不存在：{path}"
 
         pdf_path = md_path.with_suffix(".pdf")
+        job_key = str(pdf_path.resolve())
 
+        with _pdf_jobs_lock:
+            job = _pdf_jobs.get(job_key)
+            if job and job.get("status") == "running":
+                return f"PDF 正在后台生成中：{pdf_path.name}，请稍后在产出文件区查看。"
+
+            _pdf_jobs[job_key] = {
+                "status": "running",
+                "submitted_at": datetime.now().isoformat(),
+                "error": None,
+            }
+
+        def _worker():
+            try:
+                result = self._render_pdf_sync(md_path, pdf_path, title)
+                with _pdf_jobs_lock:
+                    _pdf_jobs[job_key]["status"] = "completed"
+                    _pdf_jobs[job_key]["result"] = result
+                    _pdf_jobs[job_key]["completed_at"] = datetime.now().isoformat()
+                logger.info(f"[md_to_pdf] 后台生成完成: {pdf_path.name}")
+            except Exception as e:
+                logger.error(f"[md_to_pdf] 后台生成失败: {e}", exc_info=True)
+                with _pdf_jobs_lock:
+                    _pdf_jobs[job_key]["status"] = "failed"
+                    _pdf_jobs[job_key]["error"] = str(e)
+
+        thread = threading.Thread(target=_worker, name=f"pdf-{pdf_path.name}", daemon=True)
+        thread.start()
+
+        return (
+            f"PDF 生成任务已提交后台：{pdf_path.name}。"
+            "生成完成后会自动出现在右侧“产出文件”区，无需等待。"
+        )
+
+    def _render_pdf_sync(self, md_path: Path, pdf_path: Path, title: str = "") -> str:
+        """实际同步 PDF 渲染逻辑（在后台线程中运行）。"""
         # 先尝试 WeasyPrint（高质量排版）
         try:
-            import os
             import markdown as md_lib
             import re
             from weasyprint import HTML
@@ -285,76 +326,72 @@ class Toolkit:
                 font_path = fp
                 break
         if not font_path:
-            return "错误：未找到系统可用的中文字体，无法生成 PDF。"
+            raise RuntimeError("未找到系统可用的中文字体，无法生成 PDF。")
 
         try:
             from fpdf import FPDF
-        except ImportError:
-            return "错误：fpdf2 未安装。"
+        except ImportError as e:
+            raise RuntimeError("fpdf2 未安装。") from e
 
-        try:
-            md_text = md_path.read_text(encoding="utf-8")
-            lines = md_text.split("\n")
-            cover_title = title or md_path.stem
-            for line in lines:
-                if line.startswith("# ") and not line.startswith("##"):
-                    cover_title = line[2:].strip()
-                    break
+        md_text = md_path.read_text(encoding="utf-8")
+        lines = md_text.split("\n")
+        cover_title = title or md_path.stem
+        for line in lines:
+            if line.startswith("# ") and not line.startswith("##"):
+                cover_title = line[2:].strip()
+                break
 
-            pdf = FPDF()
-            pdf.set_auto_page_break(auto=True, margin=15)
-            pdf.add_font("cn", "", font_path)
-            pdf.add_font("cn", "B", font_path)
-            pdf.add_page()
-            pdf.set_font("cn", "B", 22)
-            pdf.ln(65)
-            pdf.cell(0, 14, cover_title, new_x="LMARGIN", new_y="NEXT", align="C")
-            pdf.add_page()
-            pdf.set_font("cn", "", 10)
-            for raw in lines:
-                line = raw.rstrip()
-                if not line:
-                    pdf.ln(3); continue
-                if line.startswith("# ") and not line.startswith("##"):
-                    pdf.set_font("cn", "B", 14); pdf.ln(5)
-                    pdf.multi_cell(0, 8, line[2:].strip(), ln=1)
-                    pdf.set_font("cn", "", 10)
-                elif line.startswith("## "):
-                    pdf.set_font("cn", "B", 12); pdf.ln(4)
-                    pdf.multi_cell(0, 7, line[3:].strip(), ln=1)
-                    pdf.set_font("cn", "", 10)
-                elif line.startswith("### "):
-                    pdf.set_font("cn", "B", 11); pdf.ln(3)
-                    pdf.multi_cell(0, 6, line[4:].strip(), ln=1)
-                    pdf.set_font("cn", "", 10)
-                elif line.startswith("#### "):
-                    pdf.set_font("cn", "B", 10); pdf.ln(2)
-                    pdf.multi_cell(0, 5, line[5:].strip(), ln=1)
-                    pdf.set_font("cn", "", 10)
-                elif line.startswith("---") or line.startswith("***"):
-                    pdf.ln(2)
-                elif line.startswith("|") and "---" not in line:
-                    cells = [c.strip() for c in line.split("|")[1:-1]]
-                    if any(cells):
-                        pdf.multi_cell(0, 4, " | ".join(c for c in cells if c), ln=1)
-                elif line.startswith("* ") or line.startswith("- "):
-                    pdf.set_x(pdf.l_margin + 4)
-                    pdf.multi_cell(0, 4, "• " + line[2:].strip().replace("**", ""), ln=1)
-                elif line.startswith("> "):
-                    pdf.set_font("cn", "B", 9)
-                    pdf.set_text_color(80, 80, 80)
-                    pdf.set_x(pdf.l_margin + 3)
-                    pdf.multi_cell(0, 4, line[2:].strip().replace("**", ""), ln=1)
-                    pdf.set_text_color(0, 0, 0)
-                    pdf.set_font("cn", "", 10)
-                else:
-                    pdf.multi_cell(0, 4, line.replace("**", ""), ln=1)
-            pdf.output(str(pdf_path))
-            size_kb = pdf_path.stat().st_size // 1024
-            return f"PDF 已生成：{pdf_path.name}（{size_kb}KB，fpdf2回退）"
-        except Exception as e:
-            logger.error(f"md_to_pdf 失败: {e}", exc_info=True)
-            return f"PDF 生成失败：{e}"
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_font("cn", "", font_path)
+        pdf.add_font("cn", "B", font_path)
+        pdf.add_page()
+        pdf.set_font("cn", "B", 22)
+        pdf.ln(65)
+        pdf.cell(0, 14, cover_title, new_x="LMARGIN", new_y="NEXT", align="C")
+        pdf.add_page()
+        pdf.set_font("cn", "", 10)
+        for raw in lines:
+            line = raw.rstrip()
+            if not line:
+                pdf.ln(3); continue
+            if line.startswith("# ") and not line.startswith("##"):
+                pdf.set_font("cn", "B", 14); pdf.ln(5)
+                pdf.multi_cell(0, 8, line[2:].strip(), ln=1)
+                pdf.set_font("cn", "", 10)
+            elif line.startswith("## "):
+                pdf.set_font("cn", "B", 12); pdf.ln(4)
+                pdf.multi_cell(0, 7, line[3:].strip(), ln=1)
+                pdf.set_font("cn", "", 10)
+            elif line.startswith("### "):
+                pdf.set_font("cn", "B", 11); pdf.ln(3)
+                pdf.multi_cell(0, 6, line[4:].strip(), ln=1)
+                pdf.set_font("cn", "", 10)
+            elif line.startswith("#### "):
+                pdf.set_font("cn", "B", 10); pdf.ln(2)
+                pdf.multi_cell(0, 5, line[5:].strip(), ln=1)
+                pdf.set_font("cn", "", 10)
+            elif line.startswith("---") or line.startswith("***"):
+                pdf.ln(2)
+            elif line.startswith("|") and "---" not in line:
+                cells = [c.strip() for c in line.split("|")[1:-1]]
+                if any(cells):
+                    pdf.multi_cell(0, 4, " | ".join(c for c in cells if c), ln=1)
+            elif line.startswith("* ") or line.startswith("- "):
+                pdf.set_x(pdf.l_margin + 4)
+                pdf.multi_cell(0, 4, "• " + line[2:].strip().replace("**", ""), ln=1)
+            elif line.startswith("> "):
+                pdf.set_font("cn", "B", 9)
+                pdf.set_text_color(80, 80, 80)
+                pdf.set_x(pdf.l_margin + 3)
+                pdf.multi_cell(0, 4, line[2:].strip().replace("**", ""), ln=1)
+                pdf.set_text_color(0, 0, 0)
+                pdf.set_font("cn", "", 10)
+            else:
+                pdf.multi_cell(0, 4, line.replace("**", ""), ln=1)
+        pdf.output(str(pdf_path))
+        size_kb = pdf_path.stat().st_size // 1024
+        return f"PDF 已生成：{pdf_path.name}（{size_kb}KB，fpdf2回退）"
 
     # ========== 知识库工具 ==========
 

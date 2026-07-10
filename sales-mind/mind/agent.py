@@ -36,7 +36,7 @@ MODEL_COMPLEX = os.getenv("MODEL_COMPLEX", "qwen3.6-plus")
 SKILL_TRIGGERS = {
     "account-research": [
         "客户研究", "查这个公司", "这家公司", "客户背景", "account research",
-        "battlecard", "公司背景", "客户公司", "纵横分析", "横纵分析",
+        "battlecard", "公司背景", "客户公司",
     ],
     "account-marketing": [
         "营销触点", "品牌调研", "投放分析", "营销打法", "社媒分析",
@@ -69,29 +69,25 @@ SKILL_TRIGGERS = {
         " thorough", " in-depth",
     ],
     "hv-analysis": [
-        # 书面/专业说法（常规分析触发）
-        "研究", "分析", "调研", "deep research", "竞品分析",
-        # 老人口语："是怎么回事"
+        # 横纵分析明确触发词
+        "纵横分析", "横纵分析", "横纵研究", "纵横研究",
+        # 口语化："是怎么回事"
         "怎么回事", "是怎么回事", "是什么来头", "什么背景",
-        # 老人口语：想了解全貌
+        # 口语化：想了解全貌
         "了解一下", "给我讲讲", "给我说说", "帮我讲讲", "帮我介绍",
-        # 老人口语：摸底/查清楚
+        # 口语化：摸底/查清楚
         "帮我查查", "帮我摸清楚", "帮我搞清楚", "帮我弄明白", "帮我摸透",
-        # 老人口语：看看这个怎么样
+        # 口语化：看看这个怎么样
         "帮我看看", "帮我看看这个", "怎么样", "好不好", "靠不靠谱",
-        # 老人口语：常规分析修饰词
+        # 口语化：常规分析修饰词
         "整体情况",
     ],
     "khazix-writer": ["写文章", "写稿", "公众号", "续写", "扩写", "出稿", "按我的风格写", "帮我写成文章"],
     "neat-freak": ["整理", "同步", "收尾", "梳理", "更新文档", "这个阶段做完了", "新人能直接上手", "文档对齐"],
     "web-access": ["搜索", "查一下", "上网", "网页", "抓取", "爬取", "看看这个链接", "打开网页"],
-    "nuwa-skill": ["造skill", "蒸馏", "女娲", "造人", "思维方式", "视角", "思维框架"],
     "ppt-master": ["做PPT", "幻灯片", "演示文稿", "deck", "presentation"],
-    "peter-lynch-perspective": ["投资分析", "选股", "股票", "财报分析", "林奇"],
-    "laotalk-perspective": ["产品分析", "运营分析", "互联网产品", "用户增长", "商业化"],
     "self-improving": ["自进化", "自我改进", "优化自己", "复盘", "总结改进"],
     "news-aggregator-skill": ["新闻", "资讯", "热点", "今天发生了什么", "最新动态"],
-    "stock-announcement-analysis": ["公告", "研报", "上市公司公告", "财报", "业绩"],
     "install-skill": ["安装技能", "装skill", "添加技能", "新技能", "给我装个", "能不能装"],
 }
 
@@ -114,7 +110,7 @@ class AgentSession:
         self.work_dir = Path(os.getenv("DATA_DIR", "./data")) / "tasks" / f"{user_id}_{int(time.time())}"
         self.work_dir.mkdir(parents=True, exist_ok=True)
         self.tools = Toolkit(self.work_dir)
-        self.todo_store = TodoStore()
+        self.todo_store = TodoStore(store_key=user_id, user_id=user_id)
         self.plan_store = PlanStore(self.todo_store)
         self._checkpoint_path = Path(os.getenv("DATA_DIR", "./data")) / "checkpoints" / f"{user_id}.json"
         self._checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -266,15 +262,19 @@ class AgentSession:
         start_iteration = 0
 
         # ===== Checkpoint 恢复 =====
-        if self._is_resume_query(query):
-            checkpoint = self._load_checkpoint()
-            if checkpoint:
-                recovered = self._restore_from_checkpoint(checkpoint, system, query)
-                if recovered:
-                    messages = recovered["messages"]
-                    self.todo_store = recovered["todo_store"]
-                    start_iteration = recovered["iteration"]
-                    logger.info(f"Checkpoint 恢复成功: user={self.user_id}, iteration={start_iteration}")
+        checkpoint = self._load_checkpoint()
+        if checkpoint:
+            recovered = self._restore_from_checkpoint(checkpoint, system, query)
+            if recovered:
+                messages = recovered["messages"]
+                self.todo_store = recovered["todo_store"]
+                start_iteration = recovered["iteration"]
+                # 恢复到原任务工作目录，保证文件/对话连续性
+                recovered_work_dir = checkpoint.get("work_dir")
+                if recovered_work_dir:
+                    self.work_dir = Path(recovered_work_dir)
+                    self.tools = Toolkit(self.work_dir)
+                logger.info(f"Checkpoint 自动恢复成功: user={self.user_id}, iteration={start_iteration}, work_dir={self.work_dir}")
 
         # 挂起当前任务（用于后续打断恢复）
         suspend(
@@ -303,13 +303,15 @@ class AgentSession:
             # 记录用户最新任务目录，供 Web 任务面板展示
             coord_work_dir = coord_result.get("work_dir")
             if coord_work_dir:
-                self._record_latest_task(Path(coord_work_dir))
+                self.work_dir = Path(coord_work_dir)
+                self.tools = Toolkit(self.work_dir)
+                self._record_latest_task(self.work_dir)
 
             # 清理打断状态（Coordinator 分支也需要）
             from mind.interruption import clear
             clear(self.user_id)
 
-            # 保存对话、情绪检测
+            # 保存对话、情绪检测（写入 Coordinator 根任务目录，确保任务历史可见）
             self._save_exchange(thread_id, query, final_reply)
             process_emotion(self.user_id, query, self.user_name)
             self.memory.close()
@@ -349,7 +351,7 @@ class AgentSession:
             from mind.interruption import clear
             clear(self.user_id)
 
-            # 任务成功完成 → 清理 checkpoint
+            # 任务成功完成 → 清理 checkpoint 和持久化 todos
             should_cleanup = (
                 final_reply
                 and not final_reply.startswith("销销出了点问题")
@@ -360,6 +362,8 @@ class AgentSession:
                     if self._checkpoint_path.exists():
                         self._checkpoint_path.unlink()
                         logger.info(f"Checkpoint 已清理: {self.user_id}")
+                    # 清空已完成的 todos
+                    self.todo_store.write([], merge=False)
                 except Exception:
                     pass
 
@@ -372,8 +376,8 @@ class AgentSession:
             self._save_exchange(thread_id, query, final_reply)
             process_emotion(self.user_id, query, self.user_name)
             if care_signals:
-                from mind.care_scanner import notify_couple_from_signals
-                notify_couple_from_signals(self.user_id, self.user_name, care_signals)
+                from mind.care_scanner import notify_managers_from_signals
+                notify_managers_from_signals(self.user_id, self.user_name, care_signals)
 
             self.memory.close()
 
@@ -436,7 +440,7 @@ class AgentSession:
                 f"用户「{self.user_name}」说：{new_query}（注意：这是从中断处恢复的任务，请继续之前的工作，不要重复已完成的内容）"
             ))
 
-            todo_store = TodoStore()
+            todo_store = TodoStore(store_key=self.user_id, user_id=self.user_id)
             restored_todos = []
             for item in checkpoint.get("todos", []):
                 restored_todos.append({
@@ -446,6 +450,9 @@ class AgentSession:
                 })
             if restored_todos:
                 todo_store.write(restored_todos, merge=False)
+            else:
+                # 如果没有 checkpoint todos，尝试从数据库加载
+                todo_store.load()
 
             return {
                 "messages": restored_messages,
@@ -619,11 +626,11 @@ class AgentSession:
     def _retrieve_knowledge(self, query: str) -> str:
         """
         Phase 2 增强：在 Plan 之前先做知识库检索
-        如果查询涉及健康、用药、日程等，自动召回相关知识
+        如果查询涉及客户、行业、竞品、融资等销售信号，自动召回相关知识
         """
         knowledge_keywords = [
-            # 健康/助理
-            "药", "病", "血压", "血糖", "医院", "体检", "吃什么", "注意",
+            # 销售/客户/行业
+            "客户", "公司", "竞品", "融资", "行业", "市场", "营销", "品牌",
             "报告", "记录", "多少", "上次", "去年", "前次",
             # 创作/表达
             "写", "整理", "创作", "朋友圈", "文案", "照片", "故事", "绘本",

@@ -6,6 +6,7 @@ TaskStore 管理任务的注册、查询、依赖调度和生命周期跟踪。
 """
 import json
 import logging
+import threading
 import time
 import uuid
 from enum import Enum
@@ -85,6 +86,9 @@ class Task:
         self.error: Optional[str] = None
         self.iteration = 0
         self.max_iterations = 50
+
+        # 取消信号
+        self.cancel_event = threading.Event()
 
         # 独立状态空间
         self.messages: List[AgentMessage] = []

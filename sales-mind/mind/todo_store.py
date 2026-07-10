@@ -12,15 +12,50 @@ VALID_STATUSES = {"pending", "in_progress", "completed", "cancelled"}
 
 
 class TodoStore:
-    """内存中的 todo 列表，每个 Agent 实例一个"""
+    """todo 列表，支持可选的数据库持久化"""
 
-    def __init__(self):
+    def __init__(self, store_key: Optional[str] = None, user_id: Optional[str] = None):
         self._items: List[Dict[str, str]] = []
+        self.store_key = store_key
+        self.user_id = user_id
+        if store_key and user_id:
+            self.load()
+
+    def load(self) -> List[Dict[str, str]]:
+        """从数据库加载 todo 列表"""
+        if not self.store_key or not self.user_id:
+            return self.read()
+        try:
+            from mind.memory import load_todos
+            loaded = load_todos(self.store_key)
+            self._items = [self._validate(t) for t in loaded]
+            logger.debug(f"[TodoStore] 已加载 {len(self._items)} 条 todos: {self.store_key}")
+        except Exception as e:
+            logger.warning(f"[TodoStore] 加载失败，使用空列表: {e}")
+            self._items = []
+        return self.read()
+
+    def save(self) -> bool:
+        """保存 todo 列表到数据库"""
+        if not self.store_key or not self.user_id:
+            return False
+        try:
+            from mind.memory import save_todos
+            return save_todos(self.store_key, self.user_id, self.read())
+        except Exception as e:
+            logger.warning(f"[TodoStore] 保存失败: {e}")
+            return False
 
     def write(self, todos: List[Dict[str, Any]], merge: bool = False) -> List[Dict[str, str]]:
         """写入 todo 列表。merge=False 时替换全部，merge=True 时按 id 更新。"""
-        if not todos:
+        if not todos and not merge:
+            self._items = []
+            self.save()
             return self.read()
+        if not todos:
+            result = self.read()
+            self.save()
+            return result
 
         if not merge:
             self._items = [self._validate(t) for t in self._dedupe_by_id(todos)]
@@ -50,6 +85,7 @@ class TodoStore:
                     rebuilt.append(current)
                     seen.add(current["id"])
             self._items = rebuilt
+        self.save()
         return self.read()
 
     def read(self) -> List[Dict[str, str]]:

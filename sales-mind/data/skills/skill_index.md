@@ -14,15 +14,11 @@
 | news-digest | 行业资讯库检索与客户分享：基于 wechat-digest 知识库生成可转发文案 | 向量知识库 |
 | 纵横分析法skill | 横纵分析法深度研究（Khazix版），产出PDF报告 | WebSearch/WebFetch |
 | web-access | 联网操作（搜索/抓取/CDP浏览器） | Chrome CDP, Node.js 22+ |
-| nuwa-skill | 女娲造人：输入人名/主题，自动蒸馏思维框架生成Skill | WebSearch |
 | self-improving | 自进化Skill，持续优化自身表现 | — |
 | find-skills | 技能发现与检索 | — |
-| laotalk-perspective | 老talk视角：互联网产品/运营思维框架 | — |
-| peter-lynch-perspective | 彼得·林奇视角：投资分析思维框架 | — |
 | ppt-master | PPT制作大师 | — |
 | news-aggregator-skill | 新闻聚合与摘要 | WebSearch |
 | skill-distillation-workflow | Skill蒸馏工作流 | — |
-| stock-announcement-analysis | 股票公告分析 | WebSearch |
 
 ## 创作技能（Baoyu系列）
 
@@ -47,7 +43,6 @@
 | baoyu-compress-image | 图片压缩 | — |
 | baoyu-danger-gemini-web | Gemini Web访问 | Gemini API |
 | baoyu-danger-x-to-markdown | X/Twitter转Markdown | WebFetch |
-| draw-things-generator | Draw Things图像生成 | Draw Things App |
 | release-skills | 技能发布工作流 | — |
 
 ## 使用说明

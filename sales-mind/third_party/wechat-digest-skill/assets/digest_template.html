@@ -201,21 +201,21 @@ main{padding:1.6rem 0 4rem}
     </div>
   </div>
   <nav class="tabs" id="tabs">
-    <button class="tab on" data-view="overview">总览</button>
-    <button class="tab" data-view="library">文章库</button>
+    <button class="tab on" data-view="library">文章库</button>
     <button class="tab" data-view="leads">线索库</button>
     <button class="tab" data-view="kb">知识库</button>
     <button class="tab" data-view="collections">收藏夹</button>
+    <button class="tab" data-view="overview">总览</button>
   </nav>
   <button class="icon-btn" id="open-settings" title="AI 接口设置">⚙︎</button>
 </div></header>
 
 <main class="wrap">
-  <section class="view on" id="view-overview"></section>
-  <section class="view" id="view-library"></section>
+  <section class="view on" id="view-library"></section>
   <section class="view" id="view-leads"></section>
   <section class="view" id="view-kb"></section>
   <section class="view" id="view-collections"></section>
+  <section class="view" id="view-overview"></section>
 </main>
 
 <!-- settings modal -->
@@ -318,7 +318,7 @@ function renderOverview(){
   const maxAcc=Math.max(1,...accArr.map(x=>x[1]));
   const tile=(k,v,s)=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}${s?` <small>${s}</small>`:""}</div></div>`;
   $("#view-overview").innerHTML=`
-    <h2 class="section-title"><span class="sec-no">No.01</span> 总览 <span class="sub">knowledge base overview</span></h2>
+    <h2 class="section-title"><span class="sec-no">No.05</span> 总览 <span class="sub">knowledge base overview</span></h2>
     <div class="tiles">
       ${tile("文章总数",n)}
       ${tile("已拆解",analyzed,`/ ${n}`)}
@@ -343,7 +343,7 @@ function renderLibrary(){
   const opt=(arr,sel,labelFn)=>arr.map(v=>`<option value="${esc(typeof v==='object'?v.id:v)}" ${ (typeof v==='object'?v.id:v)===sel?"selected":""}>${esc(labelFn?labelFn(v):v)}</option>`).join("");
   const collOpts=Object.keys(collections).map(n=>`<option value="${esc(n)}" ${n===curColl?"selected":""}>${esc(n)} (${collections[n].articleIds.length})</option>`).join("");
   $("#view-library").innerHTML=`
-    <h2 class="section-title"><span class="sec-no">No.02</span> 文章库 <span class="sub">click 查看拆解 · ⭐ 加入收藏夹</span></h2>
+    <h2 class="section-title"><span class="sec-no">No.01</span> 文章库 <span class="sub">click 查看拆解 · ⭐ 加入收藏夹</span></h2>
     <div class="toolbar">
       <input type="text" id="f-q" placeholder="搜索标题/正文/公众号…" value="${esc(filt.q)}" />
       <select id="f-account"><option value="">全部公众号</option>${opt(accs,filt.account)}</select>
@@ -465,7 +465,7 @@ function setLeadPerspective(p){
 function renderLeads(){
   const view=$("#view-leads");
   view.innerHTML=`
-    <h2 class="section-title"><span class="sec-no">No.02b</span> 线索库 <span class="sub">media → client → competitor → replicable industry</span></h2>
+    <h2 class="section-title"><span class="sec-no">No.02</span> 线索库 <span class="sub">media → client → competitor → replicable industry</span></h2>
     <div class="toolbar">
       <div style="display:flex;gap:.35rem;border:1px solid var(--line);border-radius:var(--r);padding:.2rem;background:var(--paper)">
         <button class="btn sm ${leadPerspective==="media"?"primary":""}" onclick="setLeadPerspective('media')">媒体视角</button>
@@ -872,7 +872,7 @@ sm.onclick=e=>{ if(e.target===sm)sm.classList.remove("on"); };
 $("#set-save").onclick=()=>{ aiCfg={base:$("#set-base").value.trim(),provider:$("#set-provider").value,model:$("#set-model").value.trim(),key:$("#set-key").value.trim()}; LS.set(K_AI,aiCfg); sm.classList.remove("on"); toast(aiConfigured()?"已保存，AI 接口已启用":"已保存（未填全，AI 接口未启用）"); };
 
 /* ─────────── boot ─────────── */
-bootCollections().then(()=>{ updateSaveMode(); renderOverview(); });
+bootCollections().then(()=>{ updateSaveMode(); const activeTab=document.querySelector(".tab.on"); const v=activeTab?activeTab.dataset.view:"overview"; ({overview:renderOverview,library:renderLibrary,leads:renderLeads,kb:renderKB,collections:renderCollections}[v])(); });
 </script>
 </body>
 </html>

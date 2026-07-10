@@ -165,6 +165,21 @@ class PlanStore:
         completed = sum(1 for s in steps if s["status"] == "completed")
         return completed < len(steps)
 
+    def has_plan(self) -> bool:
+        """是否存在计划（无论是否已完成）。"""
+        return self._plan is not None and len(self._plan.get("steps", [])) > 0
+
+    def get_summary(self) -> str:
+        """返回计划的简洁文本摘要。"""
+        if not self._plan:
+            return "无计划"
+        steps = self._plan["steps"]
+        lines = []
+        for s in steps:
+            marker = "✓" if s.get("status") == "completed" else (">" if s.get("status") == "in_progress" else "○")
+            lines.append(f"{marker} {s.get('id')}. {s.get('description', '')}")
+        return "\n".join(lines)
+
     def get_current_step_tools(self) -> List[str]:
         """获取当前步骤建议的工具列表。"""
         if not self._plan:

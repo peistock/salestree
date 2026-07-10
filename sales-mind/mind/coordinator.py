@@ -175,6 +175,7 @@ class TaskCoordinator:
                     messages=messages,
                     max_iterations=task.max_iterations,
                     checkpoint_path=task.checkpoint_path,
+                    cancel_event=task.cancel_event,
                 )
 
                 # 保存结果到 Task
@@ -267,10 +268,11 @@ class TaskCoordinator:
         for child_id in list(task.children):
             self.cancel_task(child_id)
 
-        # 从运行中移除（Future 无法真正中断线程，只能标记状态）
+        # 从运行中移除（Future 无法真正中断线程，通过 cancel_event 让 AgentLoop 自行退出）
         future = self._running_futures.pop(task_id, None)
+        task.cancel_event.set()
         if future and not future.done():
-            # Python ThreadPoolExecutor 不支持强制终止线程
+            # 标记取消后，底层线程会在下一轮迭代检查 cancel_event 并退出
             pass
 
         if not task.is_terminal():

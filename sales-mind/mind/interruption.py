@@ -5,7 +5,7 @@
 - 每个用户有一个任务栈（LIFO）
 - 长任务执行时被打断 → 当前任务状态压入栈
 - 回答完打断问题后 → 自动恢复栈顶任务
-- 支持多层嵌套（老人连续插嘴多次）
+- 支持多层嵌套（用户连续插嘴多次）
 
 对比旧版（Phase 2.x）：
 - 旧版：单任务挂起，内存级，不支持嵌套
@@ -68,7 +68,7 @@ def is_interruption(user_id: str, current_query: str, thread_context: str = "") 
     启发式规则：
     1. 栈不为空（有正在执行的长任务）
     2. 当前查询与栈顶任务主题明显不同（且更短/更急）
-    3. 当前查询是简单事实查询（血压、天气、时间等）
+    3. 当前查询是简单事实查询（报价、时间、天气等）
     """
     stack = _get_stack(user_id)
     if not stack:
@@ -84,7 +84,7 @@ def is_interruption(user_id: str, current_query: str, thread_context: str = "") 
         return False  # 追问，不是打断
 
     # 简单事实查询通常是打断（插嘴）
-    simple_patterns = ["多少", "血压", "血糖", "几点", "天气", "温度", "药", "吃", "睡", "儿子", "孙子", "继续"]
+    simple_patterns = ["多少", "报价", "价格", "几点", "天气", "温度", "继续"]
     is_simple = any(p in current_query for p in simple_patterns) and len(current_query) < 20
 
     # "继续"不算打断，是恢复

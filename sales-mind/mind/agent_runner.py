@@ -11,10 +11,9 @@ from mind.agent import FamilyAgent
 
 
 # ========== 用户映射 ==========
+# 销售场景：user_id 通常是销售同事账号，未匹配时默认称"同事"
 NAME_MAP = {
-    "grandpa": "爷爷", "grandma": "奶奶",
-    "grandpa2": "外公", "grandma2": "外婆",
-    "dad": "爸爸", "mom": "妈妈"
+    # 可按需添加销售同事映射，如 "zhangsan": "张三"
 }
 
 

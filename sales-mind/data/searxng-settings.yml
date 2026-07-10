@@ -1,6 +1,6 @@
 # SearXNG 配置 — SalesMind 国内引擎专用
 # 基于默认配置覆盖，只保留国内可用源
-# 注意：不使用代理，直接使用宿主机家庭宽带出口 IP
+# 注意：不使用代理，直接使用宿主机本地宽带出口 IP
 
 use_default_settings: true
 

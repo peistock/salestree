@@ -15,7 +15,7 @@ logging.basicConfig(
 
 from mind.agent import FamilyAgent
 
-agent = FamilyAgent(user_id="ChenPei", user_name="爸爸")
+agent = FamilyAgent(user_id="ChenPei", user_name="测试销售")
 result = agent.run("用 hv analysis 技能分析一下小米公司")
 print("\n" + "="*60)
 print("最终结果:")

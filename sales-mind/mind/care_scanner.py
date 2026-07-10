@@ -1,12 +1,10 @@
 """
-Care Scanner（v1.1）
-隐性基线扫描：任何域的对话都扫描健康/安全/情绪信号
-由 emotion_sensor.py 升级而来，扩展为三维扫描
+Sales Risk Scanner（销售风险扫描器）
+隐性基线扫描：任何域的对话都扫描销售风险/机会信号
+由 emotion_sensor.py 升级而来，扩展为销售信号扫描
 """
-import os
 import logging
-from typing import Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
+from typing import Dict, List, Optional
 
 from mind.memory import get_conn
 from mind.wechat import push_text
@@ -16,39 +14,42 @@ logger = logging.getLogger(__name__)
 
 # ========== 扫描规则库 ==========
 
-CARE_RULES = {
-    # 健康信号
-    "health_mention": {
-        "keywords": ["疼", "痛", "晕", "咳", "血压", "血糖", "药", "医院", "不舒服", "难受", "胸闷", "气短"],
-        "severity_keywords": ["疼得厉害", "喘不过气", "晕倒", "出血", "急救", "120", "不行了"],
+SALES_SIGNAL_RULES = {
+    # 竞品信号
+    "competitor_mention": {
+        "keywords": ["竞品", "竞争对手", "别家", "另一家", "对比", "比你们", "别的供应商", "替换"],
+        "severity_keywords": ["已经用", "签了", "定了", "换到", "切到"],
         "action": "note_only",
         "severity_action": "escalate",
     },
-    # 安全信号
-    "scam_link": {
-        "keywords": ["链接", "点击", "中奖", "免费", "转账", "验证码", "领红包", "恭喜您"],
-        "action": "intercept",
+    # 价格压力
+    "pricing_pressure": {
+        "keywords": ["贵", "便宜", "降价", "折扣", "预算", "报价高", "太贵", "有没有优惠", "再低点"],
+        "severity_keywords": ["超预算", "批不了", "太贵了", "接受不了"],
+        "action": "note_only",
+        "severity_action": "escalate",
     },
-    "scam_phone": {
-        "keywords": ["公安局", "法院", "检察院", "涉嫌", "冻结", "安全账户", "配合调查"],
-        "action": "intercept",
-    },
-    # 情绪信号
-    "mood_low": {
-        "keywords": ["没意思", "睡不着", "不想活", "活够了", "遗嘱", "交代后事", "走了算了"],
-        "action": "escalate",
-    },
-    "mood_positive": {
-        "keywords": ["开心", "高兴", "好玩", "精神", "不错", "蛮好", "舒服"],
+    # 时间紧迫
+    "urgency": {
+        "keywords": ["急", "尽快", "今天", "明天", "截止", "马上", "立刻", "赶"],
         "action": "note_only",
     },
-    "lonely": {
-        "keywords": ["想儿子", "想孙子", "想女儿", "想外孙", "孤单", "没人说话", "冷清"],
-        "action": "note_only",
-    },
-    "aging_anxiety": {
-        "keywords": ["老了", "没用", "拖后腿", "累赘", "不中用"],
+    # 负面反馈
+    "negative_feedback": {
+        "keywords": ["不满意", "失望", "有问题", "投诉", "不好", "不靠谱", "不行", "做不到"],
+        "severity_keywords": ["非常不满", "很失望", "要投诉", "终止合作", "不做了"],
         "action": "escalate",
+        "severity_action": "escalate",
+    },
+    # 流失风险
+    "churn_risk": {
+        "keywords": ["不合作", "终止", "暂停", "停掉", "换供应商", "不续签", "不签了"],
+        "action": "escalate",
+    },
+    # 积极信号
+    "positive_signal": {
+        "keywords": ["满意", "合作愉快", "确定", "签", "可以走合同", "推进", "有意向", "不错"],
+        "action": "note_only",
     },
 }
 
@@ -57,11 +58,11 @@ CARE_RULES = {
 
 def scan(text: str) -> List[Dict]:
     """
-    扫描文本，返回 care_signals 列表
+    扫描文本，返回 sales_signals 列表
     每个信号: {type, keyword, action, context, severity}
     """
     signals = []
-    for rule_name, rule in CARE_RULES.items():
+    for rule_name, rule in SALES_SIGNAL_RULES.items():
         matched = False
         matched_kw = ""
         severity = False
@@ -98,88 +99,76 @@ def scan(text: str) -> List[Dict]:
 
 def scan_tool_result(tool_name: str, result_text: str) -> List[Dict]:
     """
-    扫描工具执行结果中的 care_signals
+    扫描工具执行结果中的 sales_signals
     用于 search_web / browse_open 等工具返回的内容中也可能包含信号
     """
     return scan(result_text)
 
 
-# ========== 夫妻通知 ==========
+# ========== 管理人员通知 ==========
 
-def _get_couple_users() -> List[str]:
-    """获取夫妻用户的 user_id"""
+def _get_manager_users() -> List[str]:
+    """获取管理人员的 user_id（role 包含 manager / admin，或 entity_type 为 sales 的全部用户）"""
     conn = get_conn()
     users = []
     try:
         with conn.cursor() as c:
-            c.execute("SELECT user_id FROM user_profiles WHERE role='夫妻'")
+            c.execute("SELECT user_id FROM user_profiles WHERE role ILIKE '%manager%' OR role ILIKE '%admin%' OR entity_type='sales'")
             users = [r[0] for r in c.fetchall()]
     except Exception as e:
-        logger.error(f"获取夫妻用户失败: {e}")
+        logger.error(f"获取管理人员失败: {e}")
     finally:
         conn.close()
     return users
 
 
-def notify_couple_from_signals(user_id: str, user_name: str, signals: List[Dict]):
+def notify_managers_from_signals(user_id: str, user_name: str, signals: List[Dict]):
     """
-    根据 care_signals 决定通知策略
-    - escalate: 立即通知
-    - intercept: 立即通知 + 提醒老人
+    根据 sales_signals 决定通知策略
+    - escalate: 立即通知管理人员
     - note_only: 记录，不通知（后续 debriefing 汇总）
     """
     escalates = [s for s in signals if s["action"] == "escalate"]
-    intercepts = [s for s in signals if s["action"] == "intercept"]
 
-    if not escalates and not intercepts:
+    if not escalates:
         # note_only 的信号只记录，不实时通知
         for s in signals:
-            logger.info(f"Care signal [note_only]: user={user_id}, type={s['type']}, kw={s['keyword']}")
+            logger.info(f"Sales signal [note_only]: user={user_id}, type={s['type']}, kw={s['keyword']}")
         return
 
-    couple_users = _get_couple_users()
-    if not couple_users:
-        logger.warning("未配置夫妻用户，无法发送 care 预警")
+    managers = _get_manager_users()
+    if not managers:
+        logger.warning("未配置管理人员，无法发送销售预警")
         return
 
-    messages = []
-    if escalates:
-        lines = [f"🚨 照护预警"]
-        lines.append(f"用户：{user_name or user_id}")
-        for s in escalates:
-            lines.append(f"  • {s['type']}：检测到「{s['keyword']}」")
-        messages.append("\n".join(lines))
+    lines = [f"🚨 销售风险预警"]
+    lines.append(f"用户：{user_name or user_id}")
+    for s in escalates:
+        lines.append(f"  • {s['type']}：检测到「{s['keyword']}」")
+    message = "\n".join(lines)
 
-    if intercepts:
-        lines = [f"⚠️ 安全拦截"]
-        lines.append(f"用户：{user_name or user_id}")
-        for s in intercepts:
-            lines.append(f"  • {s['type']}：检测到「{s['keyword']}」")
-        messages.append("\n".join(lines))
-
-    for msg in messages:
-        for target_id in couple_users:
-            try:
-                result = push_text(target_id, msg)
-                if result.get("errcode") != 0:
-                    logger.warning(f"Care 预警推送 {target_id} 失败: {result}")
-                else:
-                    logger.info(f"Care 预警已推送给 {target_id}")
-            except Exception as e:
-                logger.error(f"推送失败: {e}")
+    for target_id in managers:
+        try:
+            result = push_text(target_id, message)
+            if result.get("errcode") != 0:
+                logger.warning(f"销售预警推送 {target_id} 失败: {result}")
+            else:
+                logger.info(f"销售预警已推送给 {target_id}")
+        except Exception as e:
+            logger.error(f"推送失败: {e}")
 
 
-# ========== 兼容旧接口（emotion_sensor）=========
+# ========== 兼容旧接口（emotion_sensor）==========
 
 def process_message(user_id: str, text: str, user_name: str = "") -> Optional[Dict]:
     """
     兼容 emotion_sensor.process_message 接口
-    扫描情绪 + 健康 + 安全信号
+    扫描销售风险/机会信号
     """
     signals = scan(text)
     if signals:
-        logger.info(f"Care scan: user={user_id}, signals={[s['type'] for s in signals]}")
-        notify_couple_from_signals(user_id, user_name, signals)
+        logger.info(f"Sales scan: user={user_id}, signals={[s['type'] for s in signals]}")
+        notify_managers_from_signals(user_id, user_name, signals)
         # 如果有 escalate 信号，返回预警信息
         escalates = [s for s in signals if s["action"] == "escalate"]
         if escalates:
@@ -191,14 +180,14 @@ def process_message(user_id: str, text: str, user_name: str = "") -> Optional[Di
     return None
 
 
-# ========== 情绪日志（保留原有功能）=========
+# ========== 信号日志（保留原有功能）==========
 
-def log_emotion(user_id: str, text: str, signals: List[Dict]):
-    """记录 care 信号日志到数据库"""
+def log_signals(user_id: str, text: str, signals: List[Dict]):
+    """记录 sales 信号日志到数据库"""
     if not signals:
         return
 
-    emotion_str = ", ".join(f"{s['type']}:{s['keyword']}({s['action']})" for s in signals)
+    signal_str = ", ".join(f"{s['type']}:{s['keyword']}({s['action']})" for s in signals)
     conn = get_conn()
     try:
         with conn.cursor() as c:
@@ -207,17 +196,17 @@ def log_emotion(user_id: str, text: str, signals: List[Dict]):
                 INSERT INTO emotion_logs (user_id, source_text, emotions, created_at)
                 VALUES (%s, %s, %s, NOW())
                 """,
-                (user_id, text[:500], emotion_str)
+                (user_id, text[:500], signal_str)
             )
             conn.commit()
     except Exception as e:
-        logger.error(f"记录 care 日志失败: {e}")
+        logger.error(f"记录 sales 信号日志失败: {e}")
     finally:
         conn.close()
 
 
-def get_emotion_report(user_id: str, days: int = 7) -> str:
-    """生成用户近期 care 信号报告（用于夫妻 debriefing）"""
+def get_signal_report(user_id: str, days: int = 7) -> str:
+    """生成用户近期销售信号报告（用于 debriefing）"""
     conn = get_conn()
     try:
         with conn.cursor() as c:
@@ -232,7 +221,7 @@ def get_emotion_report(user_id: str, days: int = 7) -> str:
             rows = c.fetchall()
 
         if not rows:
-            return "近7天状态平稳，未检测到显著信号。"
+            return f"近{days}天状态平稳，未检测到显著销售信号。"
 
         type_counts = {}
         for emotions_str, created_at in rows:
@@ -242,13 +231,15 @@ def get_emotion_report(user_id: str, days: int = 7) -> str:
                     type_counts[label] = type_counts.get(label, 0) + 1
 
         cn_map = {
-            "health_mention": "健康提及", "scam_link": "可疑链接",
-            "scam_phone": "诈骗电话", "mood_low": "情绪低落",
-            "mood_positive": "积极情绪", "lonely": "孤独感",
-            "aging_anxiety": "衰老焦虑",
+            "competitor_mention": "竞品提及",
+            "pricing_pressure": "价格压力",
+            "urgency": "时间紧迫",
+            "negative_feedback": "负面反馈",
+            "churn_risk": "流失风险",
+            "positive_signal": "积极信号",
         }
 
-        lines = [f"近{days}天照护扫描摘要："]
+        lines = [f"近{days}天销售信号扫描摘要："]
         for label, count in sorted(type_counts.items(), key=lambda x: -x[1]):
             lines.append(f"  • {cn_map.get(label, label)}：{count}次")
 
@@ -256,6 +247,6 @@ def get_emotion_report(user_id: str, days: int = 7) -> str:
 
     except Exception as e:
         logger.error(f"生成报告失败: {e}")
-        return "照护报告生成失败。"
+        return "销售信号报告生成失败。"
     finally:
         conn.close()

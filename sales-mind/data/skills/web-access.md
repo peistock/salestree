@@ -66,7 +66,7 @@ care_deps:
 ### search_web(query, max_results=5)
 - 用途：联网搜索实时信息（新闻、热点、公开资料、政策）
 - 底层：本地 SearXNG 容器，聚合 baidu/bing/sogou/360search/zhihu/bilibili
-- 特点：零成本、国内源、安全过滤已开启（适合老人）
+- 特点：零成本、国内源、安全过滤已开启（适合销售场景）
 - 局限：百度抓取可能限 IP（低频销售场景基本不会触发）；无结果时诚实告知用户
 - 示例：`{"tool": "search_web", "args": {"query": "2026年5月民生新规", "max_results": 5}}`
 

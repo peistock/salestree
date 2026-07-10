@@ -1,13 +1,12 @@
-# SalesMind — 新机器迁移说明（给 Agent 读）
+# 销销 — 新机器迁移说明（给 Agent 读）
 
 ## 这是什么
 
-SalesMind 是一个基于企业微信的家庭 AI 管家系统，运行在 macOS 上。
+销销（SalesMind）是一个面向互联网广告/营销公司销售团队的 AI 协作助手。
 - 后端：FastAPI + Python 3.11
 - 数据库：PostgreSQL 15 + PGVector（Docker 本地运行）
 - 本地 LLM：LM Studio（默认端口 1234）
 - 向量 Embedding：BGE-small-zh-v1.5
-- ASR：mlx-qwen3-asr（本地 MLX）
 - 管理后台：Streamlit（端口 8501）
 
 原始项目路径：`/Users/peter/sales-mind`
@@ -25,7 +24,7 @@ SalesMind 是一个基于企业微信的家庭 AI 管家系统，运行在 macOS
 | `main.py` / `cli.py` / `dashboard.py` | Web 服务、CLI、管理后台 |
 | `requirements.txt` | Python 依赖 |
 | `docker-compose.yml` | PostgreSQL 容器编排 |
-| `init.sql` | 数据库初始化脚本（含家庭成员数据） |
+| `init.sql` | 数据库初始化脚本（含销售示例数据） |
 | `CLAUDE.md` | 项目架构与上下文（必须读） |
 | `README.md` | 完整启动手册 |
 | `AGENT_HANDOFF.md` | 本文档 |
@@ -55,7 +54,7 @@ tar xzvf sales-mind.tar.gz
 ### 2. 安装系统依赖
 
 - Docker Desktop（跑 PostgreSQL）
-- Python 3.11+（`mlx-qwen3-asr` 需要 3.10+）
+- Python 3.11+
 - FFmpeg：`brew install ffmpeg`
 - LM Studio（本地 LLM，默认端口 1234）
 - `cloudflared`（可选，用于固定公网域名）
@@ -83,9 +82,10 @@ cp .env.example .env
 |-----------|------|
 | `LLM_BASE_URL` / `LLM_API_KEY` | 默认 LM Studio 本地 `http://127.0.0.1:1234/v1` + `lm-studio`；也可切换 DeepSeek / 百炼 |
 | `MODEL_DAILY` / `MODEL_COMPLEX` / `MODEL_SUMMARY` | 默认 `qwen/qwen3.6-35b-a3b`（LM Studio） |
-| `WECHAT_CORPID` / `WECHAT_AGENTID` / `WECHAT_SECRET` / `WECHAT_TOKEN` / `WECHAT_AESKEY` | 企业微信自建应用后台获取 |
+| `WECHAT_CORPID` / `WECHAT_AGENTID` / `WECHAT_SECRET` / `WECHAT_TOKEN` / `WECHAT_AESKEY` | 企业微信自建应用后台获取（可选） |
 | `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | 默认 localhost:5432，与 docker-compose.yml 一致 |
 | `WORK_DIR` / `DATA_DIR` | 默认 `./data` |
+| `SEARXNG_URL` | SearXNG 地址，本地 `http://127.0.0.1:8080`，服务器部署可指向 `https://searxng.peistock.win` |
 
 > `.env` 必须独立传输或重新填写，**不能通过压缩包传播**。
 
@@ -101,7 +101,7 @@ docker-compose up -d db
 lsof -i :5432
 ```
 
-如果有非 Docker 的 PostgreSQL 进程，先停止，否则 SalesMind 会连错数据库。
+如果有非 Docker 的 PostgreSQL 进程，先停止，否则销销会连错数据库。
 
 ### 6. 启动服务
 
@@ -166,4 +166,4 @@ Claude Code 会自动读取 `CLAUDE.md` 和 `README.md` 获取项目上下文。
 
 ---
 
-*生成日期：2026-07-09*
+*生成日期：2026-07-10*
