@@ -1,0 +1,32 @@
+{
+  "name": "xiaoxiaoshu-server",
+  "version": "0.1.0",
+  "description": "销销后端 TypeScript 重写（基于 Pi agent framework）",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "^0.80.6",
+    "@earendil-works/pi-ai": "^0.80.6",
+    "@fastify/static": "^10.1.0",
+    "@fastify/websocket": "^11.0.0",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.39.0",
+    "fastify": "^5.2.1",
+    "gray-matter": "^4.0.3",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

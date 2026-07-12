@@ -1,4 +1,7 @@
 .env
+server/.env
+server/node_modules/
+server/dist/
 __pycache__/
 *.pyc
 *.pyo
