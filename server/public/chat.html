@@ -933,15 +933,19 @@
             border-collapse: collapse;
             font-size: 13px;
             min-width: 640px;
+            table-layout: fixed;
         }
         .policy-table th,
         .policy-table td {
             border: 1px solid var(--line);
             padding: 8px 10px;
-            text-align: left;
-            vertical-align: top;
+            text-align: center;
+            vertical-align: middle;
             line-height: 1.5;
             color: var(--ink);
+            width: calc(100% / var(--cols, 1));
+            overflow-wrap: break-word;
+            word-break: break-word;
         }
         .policy-table thead tr {
             background: var(--paper-2);
@@ -949,7 +953,6 @@
         .policy-table thead th {
             font-weight: 600;
             color: var(--ink);
-            white-space: nowrap;
         }
         .policy-table tbody tr:nth-child(even) {
             background: rgba(217, 207, 184, 0.15);
@@ -962,11 +965,6 @@
         }
         .policy-table td.empty {
             color: var(--ink-3);
-        }
-        .policy-table td:first-child,
-        .policy-table th:first-child {
-            white-space: nowrap;
-            max-width: 160px;
         }
         .policy-notes {
             margin-top: 16px;
@@ -2415,7 +2413,13 @@
                 });
                 const allNotes = [sheet.notes || ""].concat(inlineNotes).filter(Boolean).join("\n\n");
 
-                let tableHtml = `<div class="policy-table-wrap"><table class="policy-table">`;
+                const colCount = Math.max(
+                    1,
+                    ...headerRows.map((r) => r.length),
+                    ...tableRows.map((r) => r.length),
+                );
+
+                let tableHtml = `<div class="policy-table-wrap"><table class="policy-table" style="--cols: ${colCount}">`;
                 tableHtml += `<thead>`;
                 headerRows.forEach((row) => {
                     tableHtml += `<tr>${row.map((cell) => `<th>${escapeCell(cell)}</th>`).join("")}</tr>`;
