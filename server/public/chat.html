@@ -510,9 +510,22 @@
         #panel-collab {
             flex-direction: row;
         }
-        #panel-news, #panel-project {
+        #panel-news, #panel-project, #panel-policy {
             flex-direction: column;
             background: #fff;
+        }
+        .news-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            border-bottom: 1px solid #e5e5ea;
+            background: #f9f9fb;
+        }
+        .news-panel-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1c1c1e;
         }
         #panel-news iframe, #panel-project iframe {
             width: 100%;
@@ -526,6 +539,462 @@
             height: 100%;
             color: #8e8e93;
             font-size: 16px;
+        }
+
+        /* 项目看板 */
+        #panel-project {
+            background: #f9f9fb;
+            overflow-y: auto;
+        }
+        .project-panel {
+            padding: 0;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .project-header {
+            height: 58px;
+            padding: 0 18px;
+            border-bottom: 1px solid var(--line);
+            background: var(--paper);
+            display: flex;
+            align-items: center;
+        }
+        .project-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1c1c1e;
+        }
+        .project-meta {
+            font-size: 12px;
+            color: #8e8e93;
+            white-space: nowrap;
+        }
+        .project-body {
+            padding: 16px 18px;
+        }
+        .project-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            align-items: stretch;
+        }
+        .project-card {
+            background: #ffffff;
+            border-radius: 14px;
+            border: 1px solid #e5e5ea;
+            padding: 18px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .project-card.full-width {
+            grid-column: 1 / -1;
+        }
+        .project-card h3 {
+            margin: 0 0 12px 0;
+            font-size: 14px;
+            font-weight: 700;
+            color: #1c1c1e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .project-summary {
+            font-size: 15px;
+            line-height: 1.7;
+            color: #3a3a3c;
+        }
+        .project-signal {
+            padding: 14px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #007aff;
+            background: #f9f9fb;
+        }
+        .project-signal:last-child { margin-bottom: 0; }
+        .project-signal.risk { border-left-color: #ff3b30; background: #fff5f5; }
+        .project-signal.opportunity { border-left-color: #34c759; background: #f2fff5; }
+        .project-signal.todo { border-left-color: #ff9500; background: #fffaf2; }
+        .project-signal.internal { border-left-color: #af52de; background: #faf5ff; }
+        .signal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+        .signal-type {
+            font-size: 12px;
+            font-weight: 700;
+            color: #007aff;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .project-signal.risk .signal-type { color: #ff3b30; }
+        .project-signal.opportunity .signal-type { color: #34c759; }
+        .project-signal.todo .signal-type { color: #ff9500; }
+        .project-signal.internal .signal-type { color: #af52de; }
+        .signal-source {
+            font-size: 11px;
+            color: #8e8e93;
+        }
+        .signal-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #1c1c1e;
+        }
+        .action-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        .action-list li {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            padding: 10px 0;
+            border-bottom: 1px solid #f2f2f7;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #3a3a3c;
+        }
+        .action-list li:last-child { border-bottom: none; padding-bottom: 0; }
+        .action-list li:first-child { padding-top: 0; }
+        .action-check {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid #007aff;
+            flex-shrink: 0;
+            margin-top: 2px;
+            cursor: pointer;
+        }
+        .action-check.done {
+            background: #007aff;
+        }
+        .project-insights {
+            font-size: 14px;
+            line-height: 1.7;
+            color: #3a3a3c;
+        }
+        .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+            margin-top: 14px;
+            margin-bottom: 8px;
+            color: #1c1c1e;
+            font-family: var(--font-display);
+        }
+        .markdown-body h2 { font-size: 16px; }
+        .markdown-body h3 { font-size: 15px; }
+        .markdown-body p { margin: 8px 0; }
+        .markdown-body ul, .markdown-body ol {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+        .markdown-body li { margin: 4px 0; }
+        .markdown-body strong { color: #1c1c1e; }
+        .markdown-body blockquote {
+            border-left: 3px solid var(--vermilion);
+            margin: 10px 0;
+            padding-left: 12px;
+            color: #555;
+        }
+        .markdown-body code {
+            background: #f2f2f7;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .cross-ref-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+        }
+        .cross-ref-item {
+            padding: 10px 12px;
+            border-radius: 10px;
+            border-left: 4px solid #007aff;
+            background: #f9f9fb;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .cross-ref-item.risk { border-left-color: #ff3b30; background: #fff5f5; }
+        .cross-ref-item.todo { border-left-color: #ff9500; background: #fffaf2; }
+        .cross-ref-item .signal-type {
+            font-size: 11px;
+            margin-bottom: 6px;
+        }
+        .cross-ref-item .signal-content strong {
+            color: #8e8e93;
+            font-size: 11px;
+            display: block;
+            margin-top: 4px;
+        }
+        .cross-ref-item .signal-content strong:first-child { margin-top: 0; }
+        .project-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .project-action-btn {
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 1px solid #007aff;
+            background: #f0f7ff;
+            color: #007aff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .project-action-btn:hover {
+            background: #007aff;
+            color: #fff;
+        }
+        .signal-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+        }
+        .signal-action {
+            font-size: 12px;
+            color: #007aff;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+        .signal-action:hover {
+            text-decoration: underline;
+        }
+        .project-empty-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #8e8e93;
+            font-size: 15px;
+            text-align: center;
+            padding: 24px;
+        }
+        .panel-refresh-btn {
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid #007aff;
+            background: #f0f7ff;
+            color: #007aff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            margin-left: auto;
+        }
+        .panel-refresh-btn:hover {
+            background: #007aff;
+            color: #fff;
+        }
+        .panel-refresh-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .panel-header-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+        }
+        .panel-header-row .project-title {
+            margin-bottom: 0;
+        }
+        .panel-header-row .project-meta {
+            margin-bottom: 0;
+        }
+        .project-account-select {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            background: var(--paper-2);
+            color: var(--ink);
+            font-size: 16px;
+            font-weight: 700;
+            font-family: var(--font-display);
+            outline: none;
+            cursor: pointer;
+        }
+        .project-account-select option {
+            background: var(--card);
+            color: var(--ink);
+        }
+
+        /* 政策看板 */
+        #panel-policy {
+            background: var(--paper);
+            overflow-y: auto;
+            flex-direction: column;
+        }
+        .policy-panel {
+            padding: 0;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .policy-header {
+            height: 58px;
+            padding: 0 18px;
+            border-bottom: 1px solid var(--line);
+            background: var(--paper);
+            display: flex;
+            align-items: center;
+        }
+        .policy-header-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+        }
+        .policy-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--ink);
+            font-family: var(--font-display);
+        }
+        .policy-meta {
+            font-size: 12px;
+            color: var(--ink-3);
+            white-space: nowrap;
+        }
+        .policy-body {
+            padding: 16px 18px;
+        }
+        .policy-body .policy-search {
+            margin-bottom: 16px;
+        }
+        .policy-search {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            background: var(--card);
+            color: var(--ink);
+            font-size: 14px;
+            min-width: 180px;
+            outline: none;
+        }
+        .policy-search:focus {
+            border-color: var(--vermilion);
+        }
+        .policy-sheet-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .policy-sheet-tab {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            background: var(--card);
+            font-size: 14px;
+            cursor: pointer;
+            color: var(--ink-2);
+        }
+        .policy-sheet-tab:hover {
+            background: var(--paper-2);
+        }
+        .policy-sheet-tab.active {
+            background: var(--vermilion);
+            color: var(--paper);
+            border-color: var(--vermilion-d);
+        }
+        .policy-sheet-section {
+            display: none;
+            margin-bottom: 24px;
+        }
+        .policy-sheet-section.active {
+            display: block;
+        }
+        .policy-sheet-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--ink);
+            margin-bottom: 8px;
+        }
+        .policy-sheet-subtitle {
+            font-size: 12px;
+            color: var(--ink-3);
+            margin-bottom: 12px;
+        }
+        .policy-table-wrap {
+            overflow-x: auto;
+            background: var(--card);
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .policy-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            min-width: 640px;
+        }
+        .policy-table th,
+        .policy-table td {
+            border: 1px solid var(--line);
+            padding: 8px 10px;
+            text-align: left;
+            vertical-align: top;
+            line-height: 1.5;
+            color: var(--ink);
+        }
+        .policy-table thead tr {
+            background: var(--paper-2);
+        }
+        .policy-table thead th {
+            font-weight: 600;
+            color: var(--ink);
+            white-space: nowrap;
+        }
+        .policy-table tbody tr:nth-child(even) {
+            background: rgba(217, 207, 184, 0.15);
+        }
+        .policy-table tbody tr:hover {
+            background: var(--paper-2);
+        }
+        .policy-table tbody tr.highlight {
+            background: rgba(216, 64, 31, 0.12);
+        }
+        .policy-table td.empty {
+            color: var(--ink-3);
+        }
+        .policy-table td:first-child,
+        .policy-table th:first-child {
+            white-space: nowrap;
+            max-width: 160px;
+        }
+        .policy-notes {
+            margin-top: 16px;
+            padding: 16px;
+            background: var(--card);
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--ink-2);
+            white-space: pre-wrap;
+        }
+        .policy-notes h4 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: var(--ink);
+        }
+        .policy-empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #8e8e93;
+            font-size: 15px;
+            text-align: center;
+            padding: 24px;
+            gap: 12px;
         }
 
         /* 左侧看板切换 */
@@ -781,9 +1250,8 @@
         <!-- 左侧：项目和线程入口 -->
         <aside id="sidebar-left">
             <div class="sidebar-header">
-                <img src="/data/assets/xiaoxiaoshu-logo.png" alt="销销树" class="logo">
                 <div class="sidebar-title-block">
-                    <div class="sidebar-title">销销</div>
+                    <div class="sidebar-title">销销树</div>
                     <div class="sidebar-subtitle">销售智能协作空间</div>
                 </div>
             </div>
@@ -801,6 +1269,10 @@
                         <span class="panel-nav-icon">📁</span>
                         <span>项目看板</span>
                     </button>
+                    <button class="panel-nav-btn" data-panel="policy">
+                        <span class="panel-nav-icon">💰</span>
+                        <span>政策看板</span>
+                    </button>
                 </div>
             </div>
             <div class="sidebar-section">
@@ -810,12 +1282,8 @@
             <div class="sidebar-section">
                 <button id="newTaskBtn" class="new-task-btn">+ 新建任务</button>
             </div>
-            <div class="sidebar-section">
-                <div class="sidebar-section-title">当前任务</div>
-                <div id="currentTaskPanel" class="empty-state">暂无任务</div>
-            </div>
-            <div class="sidebar-section" style="flex:1; overflow-y:auto;">
-                <div class="sidebar-section-title">任务历史</div>
+            <div class="sidebar-section" id="taskHistorySection" style="flex:1; overflow-y:auto;">
+                <div class="sidebar-section-title">任务清单</div>
                 <div id="taskHistoryPanel" class="task-list"></div>
             </div>
         </aside>
@@ -861,10 +1329,6 @@
                             <div class="panel-section-title">产出文件</div>
                             <div id="summaryFiles" class="file-list"></div>
                         </div>
-                        <div class="panel-section">
-                            <div class="panel-section-title">完整结果</div>
-                            <div id="summaryPreview" class="preview-content">暂无结果</div>
-                        </div>
                     </div>
                     <div id="tab-conversation" class="tab-content">
                         <div class="panel-section">
@@ -883,13 +1347,20 @@
 
             <!-- 资讯看板 -->
             <div id="panel-news" class="panel">
-                <iframe src="/wechat_kb" title="行业资讯库"></iframe>
+                <iframe src="/wechat_kb" id="newsPanelIframe" title="行业资讯库"></iframe>
             </div>
 
             <!-- 项目看板 -->
             <div id="panel-project" class="panel">
-                <div class="panel-empty">
-                    <div>项目看板占位中<br><small>具体内容稍后配置</small></div>
+                <div class="project-panel" id="projectPanelContent">
+                    <div class="project-empty-state">加载项目看板中…</div>
+                </div>
+            </div>
+
+            <!-- 政策看板 -->
+            <div id="panel-policy" class="panel">
+                <div class="policy-panel" id="policyPanelContent">
+                    <div class="panel-empty-state">加载销售政策中…</div>
                 </div>
             </div>
         </div>
@@ -921,14 +1392,22 @@
         const newTaskBtn = document.getElementById("newTaskBtn");
         const statusDot = document.getElementById("statusDot");
         const statusText = document.getElementById("statusText");
-        const currentTaskPanel = document.getElementById("currentTaskPanel");
         const taskHistoryPanel = document.getElementById("taskHistoryPanel");
         const summaryStatus = document.getElementById("summaryStatus");
         const summaryFiles = document.getElementById("summaryFiles");
-        const summaryPreview = document.getElementById("summaryPreview");
         const conversationContent = document.getElementById("conversationContent");
         const checklistItems = document.getElementById("checklistItems");
         const stopBtn = document.getElementById("stop");
+        const taskHistorySection = document.getElementById("taskHistorySection");
+
+        // 当前在右侧面板展示的任务 ID
+        let activeTaskId = null;
+
+        // 任务清单无限滚动状态
+        let taskHistoryOffset = 0;
+        const TASK_HISTORY_LIMIT = 10;
+        let taskHistoryHasMore = true;
+        let taskHistoryLoading = false;
 
         // 外部入口（如资讯工作台）通过 /chat?prompt=... 预填输入框
         (function initPromptFromUrl() {
@@ -960,6 +1439,14 @@
             const div = document.createElement("div");
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function renderMarkdown(text) {
+            if (!text) return "";
+            if (typeof marked !== "undefined") {
+                return marked.parse(text);
+            }
+            return escapeHtml(text).replace(/\\n/g, "<br>");
         }
 
         function formatTime(ts) {
@@ -1018,25 +1505,14 @@
 
         function renderCurrentTask(task) {
             if (!task) {
-                currentTaskPanel.innerHTML = '<div class="empty-state">暂无任务</div>';
+                activeTaskId = null;
                 summaryStatus.textContent = "等待任务开始…";
                 summaryFiles.innerHTML = "";
-                summaryPreview.textContent = "暂无结果";
                 conversationContent.textContent = "暂无对话记录";
                 checklistItems.innerHTML = "";
                 return;
             }
-            currentTaskPanel.innerHTML = `
-                <div class="task-item active">
-                    <div class="task-item-title" data-task-id="${escapeHtml(task.id)}" data-title="${escapeHtml(task.title || task.id)}">${escapeHtml(task.title || task.id)}</div>
-                    <div class="task-item-id">${escapeHtml(task.id)}</div>
-                    <div class="task-item-meta">迭代 ${task.iteration} · ${formatTime(task.timestamp)}</div>
-                </div>
-            `;
-            const currentTitleEl = currentTaskPanel.querySelector(".task-item-title");
-            if (currentTitleEl) {
-                makeEditableTitle(currentTitleEl, task.id, task.title || task.id);
-            }
+            activeTaskId = task.id;
             summaryStatus.textContent = `${task.title || task.id} · 迭代 ${task.iteration}`;
 
             summaryFiles.innerHTML = "";
@@ -1049,10 +1525,6 @@
             } else {
                 summaryFiles.innerHTML = '<div class="empty-state">暂无文件</div>';
             }
-
-            summaryPreview.innerHTML = task.result_preview
-                ? (typeof marked !== 'undefined' ? marked.parse(task.result_preview) : escapeHtml(task.result_preview).replace(/\\n/g, "<br>"))
-                : "暂无结果";
 
             conversationContent.innerHTML = task.conversation
                 ? (typeof marked !== 'undefined' ? marked.parse(task.conversation) : escapeHtml(task.conversation).replace(/\\n/g, "<br>"))
@@ -1073,6 +1545,14 @@
             } else {
                 checklistItems.innerHTML = '<div class="empty-state">暂无检查项</div>';
             }
+            highlightActiveTaskInList();
+        }
+
+        function highlightActiveTaskInList() {
+            document.querySelectorAll("#taskHistoryPanel .task-item").forEach(el => el.classList.remove("active"));
+            if (!activeTaskId) return;
+            const activeItem = document.querySelector(`#taskHistoryPanel .task-item[data-task-id="${activeTaskId}"]`);
+            if (activeItem) activeItem.classList.add("active");
         }
 
         async function pollTask() {
@@ -1088,25 +1568,32 @@
             }
         }
 
-        async function loadTaskHistory() {
+        async function loadTaskHistory(offset = 0, append = false) {
+            if (taskHistoryLoading) return;
+            taskHistoryLoading = true;
             const userId = userSelect.value || "web_user";
             try {
-                const res = await fetch(`/api/task_history?user_id=${userId}&limit=10`);
+                const res = await fetch(`/api/task_history?user_id=${userId}&limit=${TASK_HISTORY_LIMIT}&offset=${offset}`);
                 if (!res.ok) return;
                 const data = await res.json();
-                taskHistoryPanel.innerHTML = "";
+                if (!append) {
+                    taskHistoryPanel.innerHTML = "";
+                    taskHistoryOffset = 0;
+                    taskHistoryHasMore = true;
+                }
                 if (!data.tasks || data.tasks.length === 0) {
-                    taskHistoryPanel.innerHTML = '<div class="empty-state">暂无历史</div>';
+                    if (!append) taskHistoryPanel.innerHTML = '<div class="empty-state">暂无任务</div>';
+                    taskHistoryHasMore = false;
                     return;
                 }
                 data.tasks.forEach(t => {
                     const item = document.createElement("div");
                     item.className = "task-item";
+                    item.dataset.taskId = t.id;
                     item.title = escapeHtml(t.title || t.id);
                     item.innerHTML = `
                         <div class="task-item-info">
                             <div class="task-item-title" data-task-id="${escapeHtml(t.id)}" data-title="${escapeHtml(t.title || t.id)}">${escapeHtml(t.title || t.id)}</div>
-                            <div class="task-item-id">${escapeHtml(t.id)}</div>
                             <div class="task-item-meta">${formatTime(t.mtime)}</div>
                         </div>
                         <button class="task-item-delete" title="删除">×</button>
@@ -1122,21 +1609,35 @@
                     });
                     taskHistoryPanel.appendChild(item);
                 });
+                taskHistoryOffset = offset + data.tasks.length;
+                taskHistoryHasMore = data.tasks.length >= TASK_HISTORY_LIMIT;
             } catch (e) {
-                console.error("加载任务历史失败:", e);
+                console.error("加载任务清单失败:", e);
+            } finally {
+                taskHistoryLoading = false;
+                highlightActiveTaskInList();
             }
         }
 
+        taskHistorySection.addEventListener("scroll", () => {
+            if (!taskHistoryHasMore || taskHistoryLoading) return;
+            const { scrollTop, clientHeight, scrollHeight } = taskHistorySection;
+            if (scrollTop + clientHeight >= scrollHeight - 50) {
+                loadTaskHistory(taskHistoryOffset, true);
+            }
+        });
+
         async function deleteTask(taskId) {
+            const userId = userSelect.value || "web_user";
             if (!confirm(`确定要删除任务 ${taskId} 吗？\n删除后将无法恢复。`)) return;
             try {
-                const res = await fetch(`/api/delete_task?task_id=${taskId}`, { method: "POST" });
+                const res = await fetch(`/api/delete_task?user_id=${userId}&task_id=${taskId}`, { method: "POST" });
                 if (!res.ok) return;
                 const data = await res.json();
                 if (data.success) {
                     loadTaskHistory();
                     // 如果删除的是当前展示的任务，清空右侧面板
-                    if (summaryStatus.textContent.includes(taskId)) {
+                    if (activeTaskId === taskId) {
                         renderCurrentTask(null);
                     }
                 } else {
@@ -1148,16 +1649,17 @@
         }
 
         async function renameTask(taskId, newTitle, onSuccess) {
+            const userId = userSelect.value || "web_user";
             if (!newTitle.trim()) return;
             try {
-                const res = await fetch(`/api/rename_task?task_id=${encodeURIComponent(taskId)}&title=${encodeURIComponent(newTitle.trim())}`, { method: "POST" });
+                const res = await fetch(`/api/rename_task?user_id=${userId}&task_id=${encodeURIComponent(taskId)}&title=${encodeURIComponent(newTitle.trim())}`, { method: "POST" });
                 if (!res.ok) return;
                 const data = await res.json();
                 if (data.success) {
                     if (onSuccess) onSuccess(data.title);
                     loadTaskHistory();
                     // 如果重命名的是当前任务，刷新当前展示
-                    if (summaryStatus.textContent.includes(taskId)) {
+                    if (activeTaskId === taskId) {
                         pollTask();
                     }
                 } else {
@@ -1207,21 +1709,28 @@
         }
 
         async function loadTaskDetail(taskId) {
+            const userId = userSelect.value || "web_user";
             try {
-                const res = await fetch(`/api/task_detail?task_id=${taskId}`);
+                // 1. 切换活跃线程到选中的历史任务
+                const switchRes = await fetch(`/api/switch_thread?user_id=${userId}&task_id=${taskId}`, { method: "POST" });
+                if (!switchRes.ok) throw new Error("切换任务失败");
+                const switchData = await switchRes.json();
+                if (!switchData.success) throw new Error(switchData.error || "切换任务失败");
+
+                // 2. 重新加载任务详情到右侧面板
+                const res = await fetch(`/api/task_detail?user_id=${userId}&task_id=${taskId}`);
                 if (!res.ok) return;
                 const data = await res.json();
                 renderCurrentTask(data.task);
-                // 高亮当前选中的历史任务
-                document.querySelectorAll("#taskHistoryPanel .task-item").forEach(el => el.classList.remove("active"));
-                const items = document.querySelectorAll("#taskHistoryPanel .task-item");
-                items.forEach(el => {
-                    if (el.querySelector(".task-item-id")?.textContent === taskId) {
-                        el.classList.add("active");
-                    }
-                });
+
+                // 3. 清空主聊天框，重新请求历史消息
+                chat.innerHTML = "";
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ user_id: userId, action: "hello" }));
+                }
             } catch (e) {
                 console.error("加载任务详情失败:", e);
+                append("切换任务失败，请重试", "error");
             }
         }
 
@@ -1442,6 +1951,541 @@
             btn.addEventListener("click", () => switchPanel(btn.dataset.panel));
         });
 
+        // 资讯看板刷新按钮：注入到 iframe 的 tab 栏里，放在「文章库」前面
+        const newsPanelIframe = document.getElementById("newsPanelIframe");
+        function injectNewsRefreshButton() {
+            try {
+                const iframeDoc = newsPanelIframe.contentDocument || newsPanelIframe.contentWindow?.document;
+                if (!iframeDoc) return;
+                const tabs = iframeDoc.getElementById("tabs");
+                if (!tabs || iframeDoc.getElementById("news-refresh-btn")) return;
+                const btn = iframeDoc.createElement("button");
+                btn.id = "news-refresh-btn";
+                btn.className = "tab";
+                btn.textContent = "🔄 更新";
+                btn.style.cssText = "margin-right:10px;font-weight:600;";
+                btn.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    refreshNewsPanel(btn);
+                });
+                tabs.insertBefore(btn, tabs.firstChild);
+            } catch (e) {
+                console.error("注入资讯刷新按钮失败:", e);
+            }
+        }
+        if (newsPanelIframe) {
+            newsPanelIframe.addEventListener("load", injectNewsRefreshButton);
+            // 如果 iframe 已经加载完成，立即注入
+            if (newsPanelIframe.contentDocument?.readyState === "complete") {
+                injectNewsRefreshButton();
+            }
+        }
+        // 暴露给 iframe 调用
+        window.refreshNewsPanel = refreshNewsPanel;
+
+        // ========== 项目看板加载 ==========
+        const projectPanelContent = document.getElementById("projectPanelContent");
+        let projectPanelLoaded = false;
+        let projectAccounts = [];
+        let currentProjectAccount = "环平保险";
+
+        async function loadProjectAccounts() {
+            try {
+                const res = await fetch("/api/project_accounts");
+                if (!res.ok) return;
+                const data = await res.json();
+                projectAccounts = data.accounts || [];
+                if (projectAccounts.length > 0 && !projectAccounts.find(a => a.name === currentProjectAccount)) {
+                    currentProjectAccount = projectAccounts[0].name;
+                }
+            } catch (e) {
+                console.error("加载项目账户失败:", e);
+                projectAccounts = [{ name: "环平保险" }];
+            }
+        }
+
+        function renderProjectAccountSelector() {
+            const options = projectAccounts.map(a => {
+                const selected = a.name === currentProjectAccount ? " selected" : "";
+                return `<option value="${escapeHtml(a.name)}"${selected}>${escapeHtml(a.name)}</option>`;
+            }).join("");
+            return `<select id="projectAccountSelect" class="project-account-select">${options}</select>`;
+        }
+
+        function signalClass(type) {
+            const t = (type || "").toLowerCase();
+            if (t.includes("风险")) return "risk";
+            if (t.includes("机会")) return "opportunity";
+            if (t.includes("待办")) return "todo";
+            if (t.includes("内部")) return "internal";
+            return "";
+        }
+
+        async function loadProjectPanel(account = currentProjectAccount) {
+            if (projectPanelLoaded && account === currentProjectAccount) return;
+            currentProjectAccount = account;
+            try {
+                const encoded = encodeURIComponent(account);
+                const res = await fetch(`/api/project_panel?account=${encoded}`);
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({ error: "加载失败" }));
+                    projectPanelContent.innerHTML = `<div class="project-empty-state">${err.error || "暂无项目看板数据"}</div>`;
+                    return;
+                }
+                const data = await res.json();
+                renderProjectPanel(data);
+                projectPanelLoaded = true;
+            } catch (e) {
+                projectPanelContent.innerHTML = "<div class=\"project-empty-state\">项目看板加载失败，请稍后重试</div>";
+            }
+        }
+
+        async function refreshProjectPanel(btn) {
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = "更新中…";
+            }
+            try {
+                const encoded = encodeURIComponent(currentProjectAccount);
+                const res = await fetch(`/api/refresh_project_panel?account=${encoded}`, { method: "POST" });
+                const result = await res.json().catch(() => ({ message: "已触发更新" }));
+                projectPanelContent.innerHTML = `<div class="project-empty-state">${result.message || "正在刷新…"}<br><small>大约需要 30-60 秒</small></div>`;
+                projectPanelLoaded = false;
+                setTimeout(() => {
+                    loadProjectPanel();
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = "🔄 更新";
+                    }
+                }, 35000);
+            } catch (e) {
+                projectPanelContent.innerHTML = "<div class=\"project-empty-state\">刷新失败，请稍后重试</div>";
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = "🔄 更新";
+                }
+            }
+        }
+
+        async function refreshNewsPanel(btn) {
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = "更新中…";
+            }
+            try {
+                const res = await fetch("/api/refresh_news_panel", { method: "POST" });
+                const result = await res.json().catch(() => ({ message: "已刷新" }));
+                const iframe = document.getElementById("newsPanelIframe");
+                if (iframe) {
+                    iframe.src = `/wechat_kb?t=${Date.now()}`;
+                }
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = "🔄 更新";
+                }
+            } catch (e) {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = "🔄 更新";
+                }
+            }
+        }
+
+        function renderProjectPanel(data) {
+            const account = data.account_name || "客户";
+            const signals = (data.signals || []).map((s, i) => `
+                <div class="project-signal ${signalClass(s.type)}" data-signal-idx="${i}">
+                    <div class="signal-header">
+                        <span class="signal-type">${escapeHtml(s.type)}</span>
+                        <span class="signal-source">${escapeHtml(s.source)} · ${escapeHtml(s.time)}</span>
+                    </div>
+                    <div class="signal-content">${renderMarkdown(s.content)}</div>
+                    <div class="signal-actions">
+                        <button class="signal-action" data-action="explain">追问背景</button>
+                        <button class="signal-action" data-action="draft">生成跟进话术</button>
+                    </div>
+                </div>
+            `).join("");
+
+            const actions = (data.action_items || []).map((item, i) => `
+                <li>
+                    <span class="action-check" data-idx="${i}"></span>
+                    <span>${escapeHtml(item)}</span>
+                </li>
+            `).join("");
+
+            const crossRefs = (data.cross_reference || []).map((ref, i) => {
+                const statusClass = ref.status === "未响应" ? "risk" : (ref.status === "部分响应" ? "todo" : "");
+                return `
+                    <div class="cross-ref-item ${statusClass}">
+                        <div class="signal-header">
+                            <span class="signal-type">${escapeHtml(ref.status)}</span>
+                        </div>
+                        <div class="signal-content">
+                            <strong>客户要求</strong>${renderMarkdown(ref.customer_requirement)}
+                            <strong>内部响应</strong>${renderMarkdown(ref.internal_response)}
+                        </div>
+                    </div>
+                `;
+            }).join("");
+
+            projectPanelContent.innerHTML = `
+                <div class="project-panel">
+                    <div class="project-header">
+                        <div class="panel-header-row">
+                            ${renderProjectAccountSelector()}
+                            <span class="project-meta">来源：飞书群 · 最近更新 ${new Date().toLocaleString()}</span>
+                            <button class="panel-refresh-btn" id="refreshProjectPanel">🔄 更新</button>
+                        </div>
+                    </div>
+                    <div class="project-body">
+                        <div class="project-grid">
+                            <div class="project-card">
+                                <h3>整体动态</h3>
+                                <div class="project-summary markdown-body">${renderMarkdown(data.summary || "")}</div>
+                                <div class="project-actions">
+                                    <button class="project-action-btn" id="askAccountOverview">跟销销聊聊这个客户</button>
+                                    <button class="project-action-btn" id="askAccountPriority">今天最该优先处理什么？</button>
+                                </div>
+                            </div>
+
+                            <div class="project-card">
+                                <h3>销售洞察</h3>
+                                <div class="project-insights markdown-body">${renderMarkdown(data.insights || "")}</div>
+                            </div>
+
+                            <div class="project-card full-width">
+                                <h3>待办事项</h3>
+                                <ul class="action-list">${actions || "<li>暂无待办</li>"}</ul>
+                            </div>
+
+                            <div class="project-card">
+                                <h3>客户群动态</h3>
+                                <div class="project-insights markdown-body">${renderMarkdown(data.customer_group_summary || "")}</div>
+                            </div>
+
+                            <div class="project-card">
+                                <h3>内部群动态</h3>
+                                <div class="project-insights markdown-body">${renderMarkdown(data.internal_group_summary || "")}</div>
+                            </div>
+
+                            <div class="project-card">
+                                <h3>客户要求 × 内部响应</h3>
+                                ${crossRefs ? `<div class="cross-ref-grid">${crossRefs}</div>` : "<div style=\"color:#8e8e93;font-size:14px\">暂无交叉匹配数据</div>"}
+                            </div>
+
+                            <div class="project-card">
+                                <h3>关键信号</h3>
+                                ${signals || "<div style=\"color:#8e8e93;font-size:14px\">暂无信号</div>"}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            projectPanelContent.querySelectorAll(".action-check").forEach(btn => {
+                btn.addEventListener("click", () => btn.classList.toggle("done"));
+            });
+
+            const refreshBtn = document.getElementById("refreshProjectPanel");
+            if (refreshBtn) {
+                refreshBtn.addEventListener("click", () => refreshProjectPanel(refreshBtn));
+            }
+
+            const accountSelect = document.getElementById("projectAccountSelect");
+            if (accountSelect) {
+                accountSelect.addEventListener("change", (e) => {
+                    projectPanelLoaded = false;
+                    loadProjectPanel(e.target.value);
+                });
+            }
+
+            const overviewBtn = document.getElementById("askAccountOverview");
+            if (overviewBtn) {
+                overviewBtn.addEventListener("click", () => askAboutAccount(account, data, "overview"));
+            }
+            const priorityBtn = document.getElementById("askAccountPriority");
+            if (priorityBtn) {
+                priorityBtn.addEventListener("click", () => askAboutAccount(account, data, "priority"));
+            }
+
+            projectPanelContent.querySelectorAll(".signal-action").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    const target = e.target;
+                    const card = target.closest(".project-signal");
+                    const idx = parseInt(card?.dataset.signalIdx || "-1", 10);
+                    const signal = data.signals?.[idx];
+                    if (!signal) return;
+                    const action = target.dataset.action;
+                    askAboutSignal(account, signal, action);
+                });
+            });
+        }
+
+        function askAboutAccount(account, data, mode) {
+            // 顶部总览按钮：只打开项目面板内的悬浮聊天，不自动填充长 prompt，让用户自己输入
+            openProjectChat(account);
+        }
+
+        function askAboutSignal(account, signal, action) {
+            let prompt = `我正在看【${account}】的项目看板，其中有一条信号：\n\n`;
+            prompt += `类型：${signal.type}\n来源群：${signal.source} · ${signal.time}\n内容：${signal.content}\n\n`;
+            prompt += "请调用 read_feishu_messages 工具读取这个客户的飞书群原始聊天记录，找到这条信号的原文上下文（包括前后相关消息），结合客户群和内部群的内容进行交叉验证。\n\n";
+            if (action === "explain") {
+                prompt += "基于原始上下文，告诉我这条信号背后的具体背景、涉及哪些人、我需要关注哪些风险或机会。";
+            } else {
+                prompt += "基于原始上下文，帮我拟一段发给客户或内部协同的跟进话术，要求自然、专业、不冗长。";
+            }
+            sendFromProjectPanel(prompt);
+        }
+
+        function openProjectChat(account) {
+            floatingChatMessages.innerHTML = "";
+            floatingChatEl.classList.add("open");
+            floatingChatToggle.classList.remove("open");
+            floatUnread = 0;
+            updateFloatBadge();
+            loadTaskHistory();
+            if (wsFloat) {
+                wsFloat.onclose = null;
+                wsFloat.onmessage = null;
+                wsFloat.close();
+                wsFloat = null;
+            }
+            if (floatReconnectTimer) {
+                clearTimeout(floatReconnectTimer);
+                floatReconnectTimer = null;
+            }
+            connectFloatingChat({
+                createThread: true,
+                threadTitle: account,
+                onOpen: () => {
+                    floatingChatInput.value = "";
+                    floatingChatInput.placeholder = `关于 ${account}，想问销销什么？`;
+                    floatingChatInput.focus();
+                }
+            });
+        }
+
+        function sendFromProjectPanel(prompt) {
+            const title = `${currentProjectAccount} - 追问`;
+            floatingChatMessages.innerHTML = "";
+            floatingChatEl.classList.add("open");
+            floatingChatToggle.classList.remove("open");
+            floatUnread = 0;
+            updateFloatBadge();
+            loadTaskHistory();
+            if (wsFloat) {
+                wsFloat.onclose = null;
+                wsFloat.onmessage = null;
+                wsFloat.close();
+                wsFloat = null;
+            }
+            if (floatReconnectTimer) {
+                clearTimeout(floatReconnectTimer);
+                floatReconnectTimer = null;
+            }
+            connectFloatingChat({
+                createThread: true,
+                threadTitle: title,
+                onOpen: () => {
+                    floatingChatInput.value = prompt;
+                    setTimeout(() => sendFloating(), 50);
+                }
+            });
+        }
+
+        // 切到项目看板时加载数据
+        const originalSwitchPanel = switchPanel;
+        switchPanel = function(name) {
+            originalSwitchPanel(name);
+            if (name === "project") {
+                loadProjectAccounts().then(() => loadProjectPanel());
+            }
+            if (name === "policy") {
+                loadPolicyPanel();
+            }
+        };
+
+        // ========== 政策看板加载 ==========
+        const policyPanelContent = document.getElementById("policyPanelContent");
+        let policyPanelLoaded = false;
+        let currentPolicySheet = "";
+        let currentPolicyQ = "";
+
+        async function loadPolicyPanel({ q = currentPolicyQ, sheet = currentPolicySheet } = {}) {
+            currentPolicyQ = q;
+            currentPolicySheet = sheet;
+            try {
+                const params = new URLSearchParams();
+                if (q) params.set("q", q);
+                if (sheet) params.set("sheet", sheet);
+                const res = await fetch(`/api/sales_policies?${params.toString()}`);
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({ error: "加载失败" }));
+                    policyPanelContent.innerHTML = `<div class="policy-empty-state">${err.error || "暂无销售政策数据"}</div>`;
+                    return;
+                }
+                const data = await res.json();
+                renderPolicyPanel(data, q);
+                policyPanelLoaded = true;
+            } catch (e) {
+                console.error("政策看板加载失败:", e);
+                policyPanelContent.innerHTML = "<div class=\"policy-empty-state\">销售政策加载失败，请稍后重试</div>";
+            }
+        }
+
+        async function refreshPolicyPanel(btn) {
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = "同步中…";
+            }
+            try {
+                const res = await fetch("/api/refresh_sales_policies", { method: "POST" });
+                const data = await res.json();
+                if (data.success) {
+                    await loadPolicyPanel();
+                } else {
+                    policyPanelContent.innerHTML = `<div class="policy-empty-state">同步失败：${escapeHtml(data.error || "未知错误")}</div>`;
+                }
+            } catch (e) {
+                policyPanelContent.innerHTML = "<div class=\"policy-empty-state\">同步失败，请稍后重试</div>";
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = "🔄 同步政策";
+                }
+            }
+        }
+
+        function renderPolicyPanel(data, q = "") {
+            const sheets = data.sheets || [];
+            const allSheetNames = data.sheetNames || [];
+            const updatedAt = formatTime ? formatTime(new Date(data.updatedAt).getTime() / 1000) : data.updatedAt || "";
+
+            let html = `
+                <div class="policy-header">
+                    <div class="policy-header-row">
+                        <span class="policy-title">销售政策看板</span>
+                        <span class="policy-meta">来源：飞书群${data.totalSheets > 1 ? ` · 共 ${data.totalSheets} 个 sheet` : ""}${updatedAt ? ` · 更新于 ${updatedAt}` : ""}</span>
+                        <button class="panel-refresh-btn" id="policyRefreshBtn">🔄 同步政策</button>
+                    </div>
+                </div>
+            `;
+
+            let bodyHtml = `<input type="text" id="policySearch" class="policy-search" placeholder="搜索关键词…" value="${escapeHtml(q)}">`;
+
+            if (!sheets.length) {
+                html += `<div class="policy-body">${bodyHtml}<div class="policy-empty-state">暂无匹配的销售政策</div></div>`;
+                policyPanelContent.innerHTML = html;
+                bindPolicyToolbar();
+                return;
+            }
+
+            // sheet 标签：只有多个 sheet 时才展示
+            if (allSheetNames.length > 1) {
+                const tabsHtml = allSheetNames.map((name, idx) => {
+                    const hasData = sheets.some((s) => s.name === name);
+                    const active = idx === 0 ? " active" : "";
+                    const countBadge = hasData ? "" : " (空)";
+                    return `<button class="policy-sheet-tab${active}" data-sheet="${escapeHtml(name)}">${escapeHtml(name)}${countBadge}</button>`;
+                }).join("");
+                bodyHtml += `<div class="policy-sheet-tabs">${tabsHtml}</div>`;
+            }
+
+            sheets.forEach((sheet, idx) => {
+                const active = idx === 0 ? " active" : "";
+                const highlighted = new Set(sheet.highlighted_rows || []);
+
+                const headerCount = sheet.header_row_count || 3;
+                const headerRows = sheet.rows.slice(0, headerCount);
+                const bodyRows = sheet.rows.slice(headerCount);
+
+                // 把以“备注”开头的行从表格中取出，单独展示，避免撑大单元格
+                const tableRows = [];
+                const inlineNotes = [];
+                bodyRows.forEach((row) => {
+                    const first = (row[0] || "").trim();
+                    if (first.startsWith("备注")) {
+                        inlineNotes.push(first);
+                    } else {
+                        tableRows.push(row);
+                    }
+                });
+                const allNotes = [sheet.notes || ""].concat(inlineNotes).filter(Boolean).join("\n\n");
+
+                let tableHtml = `<div class="policy-table-wrap"><table class="policy-table">`;
+                tableHtml += `<thead>`;
+                headerRows.forEach((row) => {
+                    tableHtml += `<tr>${row.map((cell) => `<th>${escapeCell(cell)}</th>`).join("")}</tr>`;
+                });
+                tableHtml += `</thead><tbody>`;
+                tableRows.forEach((row, ridx) => {
+                    const absIdx = ridx + headerCount;
+                    const hlClass = highlighted.has(absIdx) ? " highlight" : "";
+                    tableHtml += `<tr class="${hlClass}">${row.map((cell) => `<td class="${cell ? "" : "empty"}">${escapeCell(cell)}</td>`).join("")}</tr>`;
+                });
+                tableHtml += `</tbody></table></div>`;
+
+                bodyHtml += `
+                    <div class="policy-sheet-section${active}" data-sheet="${escapeHtml(sheet.name)}">
+                        ${allSheetNames.length > 1 ? `<div class="policy-sheet-title">${escapeHtml(sheet.name)}</div>` : ""}
+                        <div class="policy-sheet-subtitle">
+                            生效日期：${escapeHtml(sheet.effective_date || "—")} · ${tableRows.length} 行数据
+                        </div>
+                        ${tableHtml}
+                        ${allNotes ? `<div class="policy-notes"><h4>备注</h4>${escapeHtml(allNotes).replace(/\n/g, "<br>")}</div>` : ""}
+                    </div>
+                `;
+            });
+
+            html += `<div class="policy-body">${bodyHtml}</div>`;
+            policyPanelContent.innerHTML = html;
+            bindPolicyToolbar();
+            bindSheetTabs();
+        }
+
+        function escapeCell(text) {
+            if (!text) return "";
+            return escapeHtml(text).replace(/\n/g, "<br>");
+        }
+
+        function bindPolicyToolbar() {
+            const searchInput = document.getElementById("policySearch");
+            const refreshBtn = document.getElementById("policyRefreshBtn");
+
+            if (searchInput) {
+                searchInput.addEventListener("input", debouncePolicySearch);
+            }
+            if (refreshBtn) {
+                refreshBtn.addEventListener("click", () => refreshPolicyPanel(refreshBtn));
+            }
+        }
+
+        function bindSheetTabs() {
+            const tabs = document.querySelectorAll(".policy-sheet-tab");
+            const sections = document.querySelectorAll(".policy-sheet-section");
+            tabs.forEach((tab) => {
+                tab.addEventListener("click", () => {
+                    const sheetName = tab.dataset.sheet;
+                    tabs.forEach((t) => t.classList.remove("active"));
+                    tab.classList.add("active");
+                    sections.forEach((s) => {
+                        s.classList.toggle("active", s.dataset.sheet === sheetName);
+                    });
+                });
+            });
+        }
+
+        let policySearchTimer = null;
+        function debouncePolicySearch(e) {
+            if (policySearchTimer) clearTimeout(policySearchTimer);
+            policySearchTimer = setTimeout(() => {
+                loadPolicyPanel({ q: e.target.value });
+            }, 250);
+        }
+
         // ========== 悬浮聊天窗口 ==========
         let wsFloat = null;
         let floatCurrentStatus = null;
@@ -1475,7 +2519,8 @@
             floatingChatInput.focus();
         }
 
-        function connectFloatingChat() {
+        function connectFloatingChat(options = {}) {
+            const { createThread = false, threadTitle = "", onOpen } = options;
             const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
             wsFloat = new WebSocket(`${wsProtocol}//${location.host}/ws/chat`);
 
@@ -1484,7 +2529,12 @@
                 floatStreamingMsg = null;
                 appendMini("已连接，可以继续聊天", "status");
                 const userId = userSelect.value || "web_user";
-                wsFloat.send(JSON.stringify({ user_id: userId, action: "hello" }));
+                if (createThread) {
+                    wsFloat.send(JSON.stringify({ user_id: userId, action: "new_thread", title: threadTitle }));
+                } else {
+                    wsFloat.send(JSON.stringify({ user_id: userId, action: "hello" }));
+                }
+                if (typeof onOpen === "function") onOpen();
             };
 
             wsFloat.onclose = () => {
