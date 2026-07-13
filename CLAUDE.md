@@ -255,7 +255,8 @@ Agent 收到后，立即在下一次交互中优先关切该客户疑虑。
 |------|------|------|------|
 | 接入层 | 消息通道（主） | 企业微信自建应用 | 官方 API，稳定 |
 | 接入层 | 消息通道（副） | 微信公众号（订阅号，个人主体） | 已接入但功能受限：个人订阅号无客服消息权限（48001），只能被动回复（5s XML），LLM 处理超时无法使用 |
-| 接入层 | Web 聊天页 | FastAPI 原生 WebSocket/HTML | 销售人员主要工作界面 |
+| 接入层 | Web 聊天页 + 资讯看板 + 政策看板 | **TypeScript Fastify** (`server/`)，WebSocket `/ws/chat` + `public/chat.html`；`/wechat_kb`、公司线索、销售政策看板均已由 TS 服务直接承载 | 销售人员主要工作界面；资讯/政策看板不再依赖 Python 遗留服务 |
+| 接入层 | 遗留 API（可选） | Python FastAPI (`main.py`) | 仅保留作本地开发/调试入口；生产环境只需 TS 服务（端口 8002）|
 | 接入层 | 公网穿透 | Cloudflare Tunnel | 免费，固定域名 |
 | 语音层 | 格式转换 | FFmpeg | 行业标准 |
 | 语音层 | ASR | mlx-qwen3-asr (Qwen3-ASR-0.6B) | 本地 MLX 加速，中文远优于 whisper |
@@ -274,7 +275,7 @@ Agent 收到后，立即在下一次交互中优先关切该客户疑虑。
 | 智能层 | 复杂 LLM | **LM Studio 本地 qwen/qwen3.6-35b-a3b** | 同上 |
 | 智能层 | 备选 LLM | DeepSeek v4-flash / 百炼 qwen3.6-plus / NVIDIA / Kimi | 云端 API，通过 `LLM_FALLBACK_URLS/KEYS` 等环境变量配置后自动故障转移；错误分类按超时/限流/连接/认证分别处理 |
 | 智能层 | 敏感/压缩 LLM | Gemma 4 26B（LM Studio） | 本地，隐私，用于上下文压缩 |
-| 基础设施 | 后端框架 | FastAPI + Python 3.11 | 异步，生态成熟 |
+| 基础设施 | 后端框架 | **TypeScript Fastify**（`server/`，Web 聊天、对话持久化、资讯看板、项目看板）| TS 层已接管主要 Web 能力；复杂 Agent 逻辑在需要时仍可走 Python 遗留工具代理 |
 | 基础设施 | 部署 | 混合：本地 Python + Docker PostgreSQL | 代码本地跑，PG 容器化 |
 | 基础设施 | 进程守护 | 手动 / launchd（后续配置） | 当前开发阶段手动启动 |
 | 管理后台 | Web UI | Streamlit | 快速，Python 原生 |
@@ -283,48 +284,13 @@ Agent 收到后，立即在下一次交互中优先关切该客户疑虑。
 
 ## 九、实施路线
 
-### Phase 1：地基（已完成 ✅）
-- Docker PostgreSQL + PGVector
-- 企微接入（接收/推送/重试/去重/加密回调验证）
-- 固定 Cloudflare Tunnel
-- Agent 框架（Tool Calling while 循环）
-- 基础记忆层（用户画像 + 对话历史）
+历史已完成阶段见 git log。当前仍开放：
 
-### Phase 2：记忆大脑（已完成 ✅）
-- BGE Embedding + PGVector 向量检索
-- 知识库（PDF/txt/md 解析 + 分段 + 向量化）
-- 自动摘要与线程归档
-- 画像自动沉淀
-
-### Phase 2.x：关联引擎与协作感（已完成 ✅）
-- [x] **关联引擎**：规则表 + 触发器
-- [x] **协作面话术改造**：自然描述式风格
-- [x] **销售仪式**：早间简报/午间快讯/晚间复盘
-- [x] **伪打断-恢复**：多轮对话续接机制
-- [x] **情绪感知（文字层）**：销售沟通情绪关键词检测 + 对话行为分析
-- [x] **风险扫描**：客户沟通中的竞品/价格/流失信号
-
-### Phase 3：销售核心能力
-- [x] 客户研究 skill（account-research）
-- [x] 跟进文案 skill（outreach-drafter）
-- [x] 风险扫描（care_scanner 销售化）
-- [x] 沟通情绪感知（emotion_sensor 销售化）
-- [ ] Edge-TTS 语音合成
-
-### Phase 4：资讯工作台与线索库（已完成 ✅）
-- [x] 公众号文章抓取/导入
-- [x] 知识库分析
-- [x] 线索自动提取（客户公司、竞品、可复制行业、服务机会）
-- [x] `/wechat_kb` 资讯看板
-
-### Phase 5：优化（可选）
-- [x] 云端模型备选路由（NVIDIA/DeepSeek/Kimi，故障自动切换）
-- [x] 上下文压缩触发机制与摘要注入角色优化
-- [x] Agent 循环时间/token/迭代三维预算控制
-- [ ] 单元测试覆盖核心模块
-- [x] 打断-恢复的真实现（任务栈）
-- [ ] 音频情绪分析（pyAudioAnalysis）
-- [ ] 进程守护（launchd / systemd）
+- Edge-TTS 语音合成
+- 核心模块单元测试
+- 音频情绪分析
+- 进程守护（launchd / systemd）
+- Coordinator 任务恢复：发送"继续"时应回到原 `x-*` 协调任务（当前待修复）
 
 ---
 
@@ -351,11 +317,11 @@ Agent 收到后，立即在下一次交互中优先关切该客户疑虑。
 ## 十二、如何继续开发
 
 ```bash
-cd ~/sales-mind
+cd /Users/cpp/salestree
 claude
 ```
 
-Claude Code 会自动读取本文件获取全部上下文。
+Claude Code 会自动读取本文件与 `server/CLAUDE.md` 获取上下文。
 
 **下一步指令示例**：
 - "实现客户研究 skill 的多源并行搜索"

@@ -1,4 +1,6 @@
-import { config } from "../config.ts";
+import { Embedder } from "./Embedder.ts";
+
+const EMBED_TIMEOUT_MS = 60_000;
 import { query } from "../db/index.ts";
 
 export interface KnowledgeChunk {
@@ -67,14 +69,12 @@ export class VectorStore {
   }
 
   private async embed(text: string): Promise<number[]> {
-    const url = `${config.pythonFallbackUrl}/internal/embed`;
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ texts: [text] }),
-    });
-    if (!resp.ok) throw new Error(`embed failed: ${resp.status}`);
-    const data = (await resp.json()) as { embeddings: number[][] };
-    return data.embeddings[0];
+    const embedder = Embedder.getInstance();
+    return await Promise.race([
+      embedder.embed(text),
+      new Promise<number[]>((_, reject) =>
+        setTimeout(() => reject(new Error("embedding timeout")), EMBED_TIMEOUT_MS)
+      ),
+    ]);
   }
 }

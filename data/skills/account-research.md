@@ -3,7 +3,7 @@ name: account-research
 description: |
   客户公司一页纸 battlecard 研究 Skill。
   当销售提到某个客户公司、想了解客户背景、财务状况、融资动态、高管团队、招聘信号、竞品格局或口碑风险时使用。
-  触发词：客户研究、查这个公司、这家公司、客户背景、account research、battlecard、公司背景、客户公司、纵横分析、横纵分析。
+  触发词：客户研究、查这个公司、这家公司、客户背景、account research、battlecard、公司背景、客户公司。
   不用于泛泛行业研究（用 hv-analysis），不用于写触达文案（用 outreach-drafter），不用于单独调研营销触点（用 account-marketing）。
 ---
 

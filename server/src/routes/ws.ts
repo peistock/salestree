@@ -1,13 +1,46 @@
 import type { FastifyInstance } from "fastify";
+import { createHash } from "crypto";
 import { AgentSession, type OutgoingMessage } from "../agent/Session.ts";
+import { ConversationStore } from "../memory/ConversationStore.ts";
 
 interface ClientMessage {
   user_id?: string;
   message?: string;
-  action?: "hello" | "stop";
+  action?: "hello" | "stop" | "new_thread";
+  title?: string;
+}
+
+interface HistoryMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
 const activeSessions = new Map<string, AgentSession>();
+const conversationStore = new ConversationStore();
+
+const DEDUP_TTL_MS = 60_000;
+const dedupCache = new Map<string, number>();
+
+function dedupKey(userId: string, message: string): string {
+  return createHash("sha256").update(`${userId}:${message}`).digest("hex");
+}
+
+function isDuplicate(key: string): boolean {
+  const now = Date.now();
+  const lastSeen = dedupCache.get(key);
+  if (lastSeen && now - lastSeen < DEDUP_TTL_MS) {
+    return true;
+  }
+  dedupCache.set(key, now);
+  return false;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, ts] of dedupCache.entries()) {
+    if (now - ts > DEDUP_TTL_MS) dedupCache.delete(key);
+  }
+}, 300_000);
 
 export async function wsChatRoutes(app: FastifyInstance) {
   app.get("/ws/chat", { websocket: true }, (socket: any, req) => {
@@ -36,7 +69,39 @@ export async function wsChatRoutes(app: FastifyInstance) {
       }
 
       if (data.action === "hello") {
-        send({ type: "status", message: "已连接" });
+        try {
+          const threadId = await conversationStore.getOrCreateActiveThread(userId);
+          const messages = await conversationStore.getRecentMessages(userId, threadId, 50);
+          const history: HistoryMessage[] = messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          }));
+          send({
+            type: "history",
+            hint: history.length > 0 ? "已恢复当前对话" : undefined,
+            messages: history,
+          } as OutgoingMessage);
+        } catch (err) {
+          console.error("[ws] 恢复历史失败:", err);
+          send({ type: "status", message: "已连接" });
+        }
+        return;
+      }
+
+      if (data.action === "new_thread") {
+        try {
+          await conversationStore.archiveAllThreads(userId);
+          const threadId = await conversationStore.createThread(userId, data.title || "");
+          send({
+            type: "history",
+            hint: `已新建任务：${data.title || "新任务"}`,
+            messages: [],
+          } as OutgoingMessage);
+          console.log(`[ws] 新建线程 ${threadId} for ${userId}, title=${data.title || ""}`);
+        } catch (err) {
+          console.error("[ws] 新建线程失败:", err);
+          send({ type: "error", message: "新建任务失败" });
+        }
         return;
       }
 
@@ -46,9 +111,25 @@ export async function wsChatRoutes(app: FastifyInstance) {
         return;
       }
 
+      const key = dedupKey(userId, message);
+      if (isDuplicate(key)) {
+        send({ type: "status", message: "消息正在处理中，请勿重复发送" });
+        return;
+      }
+
       // 串行：同一个 user_id 只保留最新会话，旧的中止
       activeSessions.get(userId)?.abort();
-      const session = new AgentSession(userId);
+
+      let threadId: string;
+      try {
+        threadId = await conversationStore.getOrCreateActiveThread(userId);
+      } catch (err) {
+        console.error("[ws] 获取线程失败:", err);
+        send({ type: "error", message: "无法创建对话线程" });
+        return;
+      }
+
+      const session = new AgentSession(userId, "", threadId, conversationStore);
       activeSessions.set(userId, session);
 
       send({ type: "status", message: "销销正在思考…" });

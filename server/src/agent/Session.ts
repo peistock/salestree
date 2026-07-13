@@ -7,15 +7,19 @@ import { Memory } from "../memory/Memory.ts";
 import { AssociationEngine } from "../association/AssociationEngine.ts";
 import { SkillLoader } from "../skills/SkillLoader.ts";
 import { VectorStore } from "../knowledge/VectorStore.ts";
+import { ConversationStore } from "../memory/ConversationStore.ts";
+import { IterationBudget } from "./IterationBudget.ts";
 
 export interface OutgoingMessage {
-  type: "status" | "token" | "event" | "result" | "error";
+  type: "status" | "token" | "event" | "result" | "error" | "history";
   content?: string;
   event_type?: string;
   message?: string;
   reply?: string;
   files?: string[];
   found_files?: string[];
+  hint?: string;
+  messages?: { role: "user" | "assistant"; content: string }[];
 }
 
 export class AgentSession {
@@ -23,15 +27,20 @@ export class AgentSession {
   private chunks: string[] = [];
   private finalText = "";
   private turnCount = 0;
-  private readonly maxTurns = 4;
   private userId: string;
   private memory: Memory;
   private association: AssociationEngine;
   private skillLoader: SkillLoader;
   private vectorStore: VectorStore;
+  private budget: IterationBudget = new IterationBudget();
+  private onBudgetExceeded?: (reason: string) => void;
+  private threadId: string;
+  private conversationStore: ConversationStore;
 
-  constructor(userId: string, userName = "") {
+  constructor(userId: string, userName = "", threadId: string, conversationStore: ConversationStore) {
     this.userId = userId;
+    this.threadId = threadId;
+    this.conversationStore = conversationStore;
     const { model, streamFn } = createLlmModel();
     this.agent = new Agent({
       initialState: {
@@ -64,8 +73,9 @@ export class AgentSession {
 - get_time：返回当前日期和时间
 - search_web：联网搜索实时信息（新闻、公开资料、政策等）
 - fetch_webpage / browse_open / jina_reader：获取指定网页内容
-- search_industry_news：在销销知识库/资讯工作台搜索行业文章
-- get_account / list_accounts：查询 CRM 客户公司
+- search_industry_news：按关键词在销销知识库/资讯工作台搜索文章（适合查某个客户/主题相关的文章）
+- get_news_digest：读取资讯看板（/wechat_kb）整体最新摘要，包含主题、文章标题摘要、线索库。当用户问'总结资讯看板'、'今天有什么资讯'、'最近行业动态'时优先调用
+- read_feishu_messages：读取指定客户的飞书群原始聊天记录。销销会定期通过飞书 CLI 从客户群、内部群拉取消息，原始记录保存在 data/projects/{客户名}_messages.json。当用户提及'飞书群'、'群里'、'客户群'、'内部群'、追问某条项目看板信号背景、或需要基于原始聊天内容分析时优先调用
 - get_contacts / get_deals / get_activities：查询联系人、商机、活动记录
 - log_activity：将跟进活动写入 CRM
 - save_account_research：把研究摘要写回客户资料的 research_summary 字段
@@ -87,8 +97,17 @@ export class AgentSession {
     this.chunks = [];
     this.finalText = "";
     this.turnCount = 0;
+    this.budget = new IterationBudget();
+    this.onBudgetExceeded = (reason: string) => {
+      send({ type: "status", message: `已超出 ${reason}，正在整理结果…` });
+    };
 
     await scanAndNotify(this.userId, "user_message", query);
+
+    // 先持久化用户原始消息，刷新页面后也能看到
+    await this.conversationStore.addMessage(this.userId, this.threadId, "user", query).catch((err) => {
+      console.error("[session] 持久化用户消息失败:", err);
+    });
 
     const contextText = await this.buildContextText(query);
     const now = Date.now();
@@ -100,22 +119,34 @@ export class AgentSession {
     this.agent.subscribe((event) => {
       if (event.type === "turn_end") {
         this.turnCount++;
-        if (this.turnCount >= this.maxTurns) {
-          this.agent.abort();
-        }
         const msg = event.message;
+        let responseContent = "";
         if (msg.role === "assistant") {
           const text = msg.content
-            .filter((b) => b.type === "text" || b.type === "thinking")
-            .map((b) => (b.type === "text" ? (b as { text: string }).text : (b as { thinking: string }).thinking))
+            .filter((b): b is { type: "text"; text: string } => b.type === "text")
+            .map((b) => b.text)
             .join("");
           if (text.length > 0) this.finalText = text;
+          responseContent = text;
+
+          // 持久化助手回复（只保存最终答案，不含思维链）
+          this.conversationStore.addMessage(this.userId, this.threadId, "assistant", this.finalText).catch((err) => {
+            console.error("[session] 持久化助手消息失败:", err);
+          });
+        }
+
+        const stopReason = this.budget.check(this.turnCount, this.agent.state.messages as any, responseContent);
+        if (stopReason) {
+          this.budget.markStopped(stopReason);
+          this.onBudgetExceeded?.(stopReason);
+          this.agent.abort();
         }
       }
 
       if (event.type === "message_update") {
         const e = event.assistantMessageEvent;
-        if (e?.type === "text_delta" || e?.type === "thinking_delta") {
+        // 只把最终答案文本流给用户，思维链（thinking_delta）不展示
+        if (e?.type === "text_delta") {
           this.chunks.push(e.delta);
           send({ type: "token", content: e.delta });
         }

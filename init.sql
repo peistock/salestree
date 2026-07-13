@@ -33,6 +33,11 @@ CREATE TABLE IF NOT EXISTS conversation_threads (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE conversation_threads
+    ADD COLUMN IF NOT EXISTS result_preview TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS files_json JSONB DEFAULT '[]',
+    ADD COLUMN IF NOT EXISTS todos_json JSONB DEFAULT '[]';
+
 -- 中期记忆摘要表
 CREATE TABLE IF NOT EXISTS memory_summaries (
     id SERIAL PRIMARY KEY,
