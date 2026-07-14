@@ -7,7 +7,7 @@ import type { Static } from "@earendil-works/pi-ai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const UPLOAD_ROOT = path.resolve(__dirname, "../../..", "data", "uploads");
+const UPLOAD_ROOT = path.resolve(__dirname, "../..", "data", "uploads");
 
 const MAX_READ_SIZE = 2 * 1024 * 1024; // 2 MB
 
