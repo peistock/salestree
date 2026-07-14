@@ -44,6 +44,122 @@ description: |
   ```
 - **字号比屏幕稿放大**：HTML 8–12px 的，PPTX 用 11–20pt+，保证投屏可读。
 
+### 最小可用脚手架
+
+以下代码可直接跑通两页 PPTX，后续按页复制 `add_slide_*` 函数扩展即可：
+
+```python
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from pptx.enum.shapes import MSO_SHAPE
+from pptx.oxml.ns import qn
+
+FONT = "微软雅黑"
+BG = RGBColor(0xFB, 0xF8, 0xF4)
+BROWN = RGBColor(0x6D, 0x43, 0x29)
+ACC = RGBColor(0xB0, 0x70, 0x4A)
+WT = RGBColor(0xF7, 0xF7, 0xF7)
+
+prs = Presentation()
+prs.slide_width = Inches(13.333)
+prs.slide_height = Inches(7.5)
+BLANK = prs.slide_layouts[6]
+
+def C(h):
+    return RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+def setrun(r, t, sz, col, bold=False):
+    r.text = t
+    r.font.size = Pt(sz)
+    r.font.bold = bold
+    r.font.color.rgb = col
+    r.font.name = FONT
+    rPr = r._r.get_or_add_rPr()
+    rPr.append(rPr.makeelement(qn('a:ea'), {'typeface': FONT}))
+
+def new_slide(bg=BG):
+    s = prs.slides.add_slide(BLANK)
+    r = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, prs.slide_height)
+    r.shadow.inherit = False
+    r.fill.solid()
+    r.fill.fore_color.rgb = bg
+    r.line.fill.background()
+    return s
+
+def rect(s, x, y, w, h, fill, line=None, lw=0.75, adj=0.04):
+    shp = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
+                             Inches(x), Inches(y), Inches(w), Inches(h))
+    shp.shadow.inherit = False
+    shp.adjustments[0] = adj
+    shp.fill.solid()
+    shp.fill.fore_color.rgb = fill
+    if line:
+        shp.line.color.rgb = line
+        shp.line.width = Pt(lw)
+    else:
+        shp.line.fill.background()
+    return shp
+
+def txt(s, x, y, w, h, lines, align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.TOP, sp=2):
+    tb = s.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    tf.vertical_anchor = anchor
+    for m in ('margin_left', 'margin_right', 'margin_top', 'margin_bottom'):
+        setattr(tf, m, Pt(2))
+    for i, ln in enumerate(lines):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        p.alignment = align
+        p.space_after = Pt(sp)
+        setrun(p.add_run(), ln[0], ln[1], ln[2], ln[3] if len(ln) > 3 else False)
+    return tb
+
+def pill(s, x, y, w, h, lab, fill=BROWN, tc=WT, sz=12, bold=False):
+    shp = rect(s, x, y, w, h, fill)
+    tf = shp.text_frame
+    tf.word_wrap = True
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    setrun(p.add_run(), lab, sz, tc, bold)
+
+# ---- 封面 ----
+s = new_slide()
+pill(s, 0.42, 0.34, 1.5, 0.46, "PITCH", fill=C("E5D8CD"), tc=BROWN, sz=14, bold=True)
+txt(s, 0.6, 2.2, 12.0, 1.2,
+    [("启初 H2 小红书投流方案", 36, BROWN, True)], align=PP_ALIGN.LEFT)
+txt(s, 0.6, 3.6, 12.0, 0.8,
+    [("高保湿霜 7-8 月 · 多重特润霜 9-12 月", 18, C("83634F"))],
+    align=PP_ALIGN.LEFT)
+
+# ---- 内容页 ----
+s = new_slide()
+pill(s, 0.42, 0.34, 1.5, 0.46, "01", fill=C("E5D8CD"), tc=BROWN, sz=14, bold=True)
+txt(s, 2.05, 0.3, 8.5, 0.55, [("分品定位", 27, BROWN, True)],
+    anchor=MSO_ANCHOR.MIDDLE)
+# 示例：三列卡片
+cards = [
+    ("高保湿霜", "7-8 月", "心智种草", "互动成本"),
+    ("多重特润霜", "9-12 月", "转化收割", "ROI"),
+]
+x0, y0 = 0.6, 1.5
+for i, (title, time, goal, kpi) in enumerate(cards):
+    x = x0 + i * 4.2
+    rect(s, x, y0, 3.8, 3.5, C("F1E8DF"))
+    txt(s, x + 0.2, y0 + 0.2, 3.4, 0.6, [(title, 18, BROWN, True)])
+    txt(s, x + 0.2, y0 + 1.0, 3.4, 1.8,
+        [(f"周期：{time}", 14, C("323232")),
+         (f"目的：{goal}", 14, C("323232")),
+         (f"重点指标：{kpi}", 14, C("323232"))],
+        sp=8)
+
+prs.save("/tmp/pitch_deck_demo.pptx")
+```
+
+> 若需更复杂版式，参考外部实例：`/Users/cpp/ppt/a800_deck_ui.py`。
+
 ## 3. 匹配参考 UI
 
 1. **抽设计 token**：主题色解 `ppt/theme/theme*.xml` 的 clrScheme；真实色块用 python-pptx 遍历 `shape.fill` 统计高频色；字体同理。
