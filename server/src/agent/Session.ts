@@ -90,6 +90,7 @@ export class AgentSession {
 - save_account_research：把研究摘要写回客户资料的 research_summary 字段
 - todo：管理当前销售的待办任务（create / update / list / clear）
 - plan：创建或推进多步骤执行计划（create / advance / progress）
+- read_file：读取用户上传的本地文件内容（HTML、TXT、MD、JSON、CSV 等），路径以 /data/uploads/ 开头
 
 要求：
 1. 回答简洁专业，用中文。
@@ -99,7 +100,8 @@ export class AgentSession {
 5. 生成跟进文案或客户研究时，优先使用 CRM 内部信息；除非用户明确要求，否则不要主动搜索外部新闻。
 6. 客户研究（account-research）时，search_web 最多调用 1 次，get_account 最多调用 1 次，最后必须调用 save_account_research 保存摘要。
 7. 引用外部信息必须标注来源。
-8. 如果提供了客户/商机/联系人背景信息，回答时要结合这些信息。`;
+8. 如果提供了客户/商机/联系人背景信息，回答时要结合这些信息。
+9. 用户上传文档后，如果用户的问题需要基于文档内容回答，必须调用 read_file 读取内容，不要以"无法读取本地文件"为由拒绝。`;
   }
 
   async run(

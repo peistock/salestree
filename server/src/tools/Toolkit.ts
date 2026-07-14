@@ -11,6 +11,8 @@ import { createTodoTool, createPlanTool } from "./todoTools.ts";
 
 import { readFeishuMessagesTool } from "./readFeishuMessages.ts";
 
+import { readFileTool } from "./readFile.ts";
+
 export function createTools(userId: string): AgentTool[] {
   return [
     getTimeTool,
@@ -21,6 +23,7 @@ export function createTools(userId: string): AgentTool[] {
     browseOpenTool,
     jinaReaderTool,
     searchIndustryNewsTool,
+    readFileTool,
     createTodoTool(userId),
     createPlanTool(userId),
     ...createDbTools(userId),
