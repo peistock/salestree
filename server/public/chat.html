@@ -337,6 +337,9 @@
             background: #e5f2ff;
             border-color: #007aff;
         }
+        .drag-over {
+            box-shadow: inset 0 0 0 2px #007aff;
+        }
         #quick-actions {
             display: flex;
             gap: 10px;
@@ -1476,6 +1479,7 @@
 
     <script>
         const chat = document.getElementById("chat");
+        const mainEl = document.getElementById("main");
         const messageInput = document.getElementById("message");
         const sendBtn = document.getElementById("send");
         const reconnectBtn = document.getElementById("reconnect");
@@ -1746,6 +1750,34 @@
                 e.preventDefault();
                 uploadFloatFiles(files);
             }
+        }
+
+        function setupDragDrop(target, uploadFn) {
+            let dragCount = 0;
+            target.addEventListener("dragenter", (e) => {
+                e.preventDefault();
+                dragCount++;
+                target.classList.add("drag-over");
+            });
+            target.addEventListener("dragover", (e) => {
+                e.preventDefault();
+            });
+            target.addEventListener("dragleave", (e) => {
+                dragCount--;
+                if (dragCount <= 0) {
+                    dragCount = 0;
+                    target.classList.remove("drag-over");
+                }
+            });
+            target.addEventListener("drop", (e) => {
+                e.preventDefault();
+                dragCount = 0;
+                target.classList.remove("drag-over");
+                const files = e.dataTransfer?.files;
+                if (files && files.length > 0) {
+                    uploadFn(files);
+                }
+            });
         }
 
         async function loadUsers() {
@@ -2180,6 +2212,7 @@
             uploadFiles(e.target.files);
             e.target.value = "";
         });
+        setupDragDrop(mainEl, uploadFiles);
         stopBtn.addEventListener("click", () => {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
             ws.send(JSON.stringify({ user_id: userSelect.value, action: "stop" }));
@@ -2961,6 +2994,7 @@
             uploadFloatFiles(e.target.files);
             e.target.value = "";
         });
+        setupDragDrop(floatingChatEl, uploadFloatFiles);
 
         floatingChatToggle.addEventListener("click", () => {
             floatingChatEl.classList.add("open");
