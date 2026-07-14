@@ -9,6 +9,7 @@ import { SkillLoader } from "../skills/SkillLoader.ts";
 import { VectorStore } from "../knowledge/VectorStore.ts";
 import { ConversationStore } from "../memory/ConversationStore.ts";
 import { IterationBudget } from "./IterationBudget.ts";
+import path from "path";
 
 export interface OutgoingMessage {
   type: "status" | "token" | "event" | "result" | "error" | "history";
@@ -66,6 +67,25 @@ export class AgentSession {
           .map((b) => b.text)
           .join("\n");
         await scanAndNotify(userId, `tool:${toolCall.name}`, text);
+
+        // 把 write_file 产出的文件追加到线程级 files_json，便于任务面板展示
+        if (toolCall.name === "write_file" && result.details?.url) {
+          try {
+            const thread = await this.conversationStore.getThread(this.userId, this.threadId);
+            const existing = (thread?.files_json as Attachment[]) ?? [];
+            const newFile: Attachment = {
+              name: String(result.details.name ?? path.basename(String(result.details.url))),
+              url: String(result.details.url),
+              mimeType: "application/octet-stream",
+              size: Number(result.details.size ?? 0),
+            };
+            const merged = [...existing, newFile];
+            await this.conversationStore.updateThreadMeta(this.userId, this.threadId, { files_json: merged });
+          } catch (err) {
+            console.error("[session] 更新线程产出文件失败:", err);
+          }
+        }
+
         return undefined;
       },
     });
@@ -93,6 +113,7 @@ export class AgentSession {
 - plan：创建或推进多步骤执行计划（create / advance / progress）
 - read_file：读取用户上传的本地文件内容（HTML、TXT、MD、JSON、CSV 等），路径以 /data/uploads/ 开头
 - read_document：读取 Word/Excel/PPT/PDF 文档并提取文本内容
+- write_file：将文本内容写入 /data/uploads/ 下的指定路径，用于生成 HTML 网页 PPT、Markdown 报告等可下载产出物
 
 要求：
 1. 回答简洁专业，用中文。

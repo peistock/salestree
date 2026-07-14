@@ -14,6 +14,7 @@ import { readDingtalkMessagesTool } from "./readDingtalkMessages.ts";
 
 import { readDocumentTool } from "./readDocument.ts";
 import { readFileTool } from "./readFile.ts";
+import { writeFileTool } from "./writeFile.ts";
 
 export function createTools(userId: string): AgentTool[] {
   return [
@@ -28,6 +29,7 @@ export function createTools(userId: string): AgentTool[] {
     searchIndustryNewsTool,
     readFileTool,
     readDocumentTool,
+    writeFileTool,
     createTodoTool(userId),
     createPlanTool(userId),
     ...createDbTools(userId),
