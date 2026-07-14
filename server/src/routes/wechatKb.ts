@@ -8,7 +8,7 @@ import { config } from "../config.ts";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const OUTPUT_DIR = path.resolve(__dirname, "../", config.wechatKbOutputDir);
+const OUTPUT_DIR = path.resolve(__dirname, "../../", config.wechatKbOutputDir);
 const DIGEST_HTML = path.join(OUTPUT_DIR, "digest.html");
 const ASSETS_DIR = path.join(OUTPUT_DIR, "assets");
 const RENDER_SCRIPT = path.resolve(__dirname, "../../../third_party/wechat-digest-skill/render_html.py");
@@ -32,6 +32,9 @@ export async function wechatKbRoutes(app: FastifyInstance) {
   ensureDigestHtml();
 
   app.get("/wechat_kb", (_req: FastifyRequest, reply: FastifyReply) => {
+    reply.header("Cache-Control", "no-cache, no-store, must-revalidate");
+    reply.header("Pragma", "no-cache");
+    reply.header("Expires", "0");
     reply.sendFile("digest.html", OUTPUT_DIR);
   });
 

@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""通用飞书群销售情报分析脚本。
+"""混合来源项目群销售情报分析脚本。
 
 用法：
-    python3 analyze_account.py --account 红果星广
+    python3 analyze_account.py --account 千问腾讯
 
 读取 data/projects/{account}_messages.json，输出：
     data/projects/{account}_analysis.json
     data/projects/{account}_analysis.md
     data/projects/{account}_history.json
+
+支持消息中同时包含飞书（create_time）和钉钉（createTime）字段。
 """
 
 import argparse
@@ -21,7 +23,7 @@ from pathlib import Path
 from openai import OpenAI
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-ACCOUNTS_PATH = PROJECT_ROOT / "data" / "projects" / "feishu_accounts.json"
+ACCOUNTS_PATH = PROJECT_ROOT / "data" / "projects" / "hybrid_accounts.json"
 DATA_DIR = PROJECT_ROOT / "data" / "projects"
 
 
@@ -50,8 +52,8 @@ def parse_time(t):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="分析飞书群销售情报")
-    parser.add_argument("--account", required=True, help="账户名，如 红果星广")
+    parser = argparse.ArgumentParser(description="分析混合来源项目群销售情报")
+    parser.add_argument("--account", required=True, help="账户名，如 千问腾讯")
     parser.add_argument("--model", help="覆盖 MODEL_DAILY 环境变量")
     parser.add_argument("--days", type=int, default=7, help="只分析最近 N 天的消息")
     parser.add_argument("--max-messages", type=int, default=200, help="最多分析消息条数")
@@ -79,7 +81,7 @@ def main():
     cutoff_naive = cutoff.replace(tzinfo=None)
     filtered = []
     for m in messages:
-        t = parse_time(m.get("create_time", ""))
+        t = parse_time(m.get("create_time") or m.get("createTime", ""))
         if t:
             t_naive = t.replace(tzinfo=None) if t.tzinfo else t
             if t_naive < cutoff_naive:
@@ -99,15 +101,15 @@ def main():
     for m in messages:
         chat = m.get("chat_name", "") or "未知群"
         chat_type = m.get("chat_type", "")
-        sender = m.get("sender", {}).get("name", m.get("sender", {}).get("id", ""))
-        time = m.get("create_time", "")
+        sender = m.get("sender_name", "")
+        source = m.get("source", "")
+        time = m.get("create_time") or m.get("createTime", "")
         content = m.get("content", "")
-        line = f"[{chat}] {time} {sender}:\n{content}\n"
+        line = f"[{source}] [{chat}] {time} {sender}:\n{content}\n"
         all_lines.append(line)
         is_customer = chat_type == "customer"
         is_internal = chat_type == "internal"
         if not is_customer and not is_internal:
-            # 兜底：按群名关键词判断
             if "客户" in chat or "投放" in chat or "素材" in chat or "外部" in chat:
                 is_customer = True
             else:
@@ -127,7 +129,7 @@ def main():
     internal_context = build_group_context(internal_groups)
     all_context = "\n".join(all_lines)
 
-    times = [parse_time(m.get("create_time", "")) for m in messages]
+    times = [parse_time(m.get("create_time") or m.get("createTime", "")) for m in messages]
     times = [t for t in times if t]
     if times:
         min_time = min(times)
@@ -159,12 +161,12 @@ def main():
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            temperature=0.3,
+            temperature=1,
             max_tokens=max_tokens,
         )
         raw = resp.choices[0].message.content or ""
+        print(f"[llm] finish_reason={resp.choices[0].finish_reason} usage={resp.usage} raw_len={len(raw)}")
         text = clean_json_text(raw)
-        print(f"[debug] finish_reason={resp.choices[0].finish_reason} raw_len={len(raw)} text_len={len(text)}")
         try:
             return json.loads(text)
         except json.JSONDecodeError as e:
@@ -175,7 +177,7 @@ def main():
             print(f"[debug] 原始输出已保存到 {debug_path}", file=sys.stderr)
             sys.exit(1)
 
-    # Step 1a: 客户群分群摘要（按群独立，严格控制长度）
+    # Step 1a: 客户群分群摘要
     customer_prompt = f"""你是 B2B 销售情报分析专家。请根据下面的客户群消息，为每个客户群生成简洁摘要。
 
 ## 要求
@@ -197,7 +199,7 @@ def main():
     customer_part = llm_json(
         client,
         model,
-        "你是 B2B 销售情报分析助手，擅长从飞书群聊中提炼客户动态。",
+        "你是 B2B 销售情报分析助手，擅长从群聊中提炼客户动态。",
         customer_prompt,
         max_tokens=8000,
     )
@@ -224,7 +226,7 @@ def main():
     internal_part = llm_json(
         client,
         model,
-        "你是 B2B 销售情报分析助手，擅长从飞书群聊中提炼内部协同动态。",
+        "你是 B2B 销售情报分析助手，擅长从群聊中提炼内部协同动态。",
         internal_prompt,
         max_tokens=8000,
     )
@@ -275,14 +277,14 @@ def main():
 内部群摘要：
 {internal_part.get("internal_group_summary", "")}
 
-## 原始消息（用于交叉验证）
-{all_context}
+## 内部群原始消息（用于交叉验证客户要求是否有内部响应）
+{internal_context}
 """
 
     details_part = llm_json(
         client,
         model,
-        "你是 B2B 销售情报分析助手，擅长从飞书群聊中提炼客户动态、识别未响应风险、生成销售待办。",
+        "你是 B2B 销售情报分析助手，擅长从群聊中提炼客户动态、识别未响应风险、生成销售待办。",
         details_prompt,
         max_tokens=8000,
     )
@@ -318,7 +320,7 @@ def main():
         return f"## {title}\n\n{body}\n\n"
 
     md_lines = [
-        f"# {args.account} 飞书群销售情报 · {date_range_str}",
+        f"# {args.account} 项目群销售情报 · {date_range_str}",
         "",
         md_section("整体动态", result.get("summary", "")),
         md_section("客户群动态", result.get("customer_group_summary", "")),

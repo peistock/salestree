@@ -91,13 +91,100 @@
             font-size: 14px;
             outline: none;
         }
+        #taskHistorySection {
+            border-bottom: none;
+        }
         #userSection {
             flex: 0 0 auto;
-            min-height: 128px;
+            min-height: 120px;
             border-bottom: none;
             display: flex;
             flex-direction: column;
-            justify-content: flex-start;
+            justify-content: flex-end;
+            padding: 10px 18px;
+            position: relative;
+        }
+        .user-profile-card {
+            background: var(--card, #fbf8f0);
+            border-radius: 14px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--ink, #1c1813);
+            border: 1px solid var(--line, #e5e5ea);
+            box-shadow: 0 1px 4px rgba(28,24,19,0.06);
+        }
+        .user-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--paper-2, #f4efe4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 600;
+            flex-shrink: 0;
+            border: 1px solid var(--line, #e5e5ea);
+            color: var(--ink, #1c1813);
+        }
+        .user-info { flex: 1; min-width: 0; }
+        .user-name { font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--ink, #1c1813); }
+        .user-id { font-size: 12px; color: var(--ink-3, #7a6f5e); margin-top: 2px; }
+        .user-menu-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            background: var(--paper-2, #f4efe4);
+            color: var(--ink-3, #7a6f5e);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s, color 0.15s;
+        }
+        .user-menu-btn:hover { background: var(--line, #e5e5ea); color: var(--ink, #1c1813); }
+        .user-menu {
+            position: absolute;
+            bottom: calc(100% - 6px);
+            left: 18px;
+            right: 18px;
+            background: var(--card, #fff);
+            border-radius: 12px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.15);
+            padding: 8px 0;
+            display: none;
+            flex-direction: column;
+            z-index: 100;
+            border: 1px solid var(--line, #e5e5ea);
+        }
+        .user-menu.open { display: flex; }
+        .user-menu-item {
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--ink, #1c1813);
+        }
+        .user-menu-item:hover { background: var(--paper, #f0f7ff); }
+        .user-menu-item.active { background: var(--paper-2, #e5f2ff); }
+        .menu-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--paper-2, #f4efe4);
+            color: var(--ink, #1c1813);
+            border: 1px solid var(--line, #e5e5ea);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
         }
         .new-task-btn {
             width: 100%;
@@ -608,18 +695,91 @@
             flex-direction: column;
             background: #fff;
         }
-        .news-panel-header {
+        #panel-news {
+            position: relative;
+        }
+        .account-tags {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 14px 18px;
-            border-bottom: 1px solid #e5e5ea;
-            background: #f9f9fb;
+            gap: 6px;
+            flex-wrap: wrap;
         }
-        .news-panel-title {
-            font-size: 16px;
-            font-weight: 700;
+        .account-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            background: #e5e5ea;
+            border-radius: 12px;
+            font-size: 13px;
             color: #1c1c1e;
+        }
+        .account-tag .remove {
+            cursor: pointer;
+            font-weight: 700;
+            color: #8e8e93;
+        }
+        .account-tag .remove:hover {
+            color: #ff3b30;
+        }
+        #newsAccountInput {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px 10px;
+            border: 1px solid #d1d1d6;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+        }
+        .news-config-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 420px;
+            max-width: calc(100% - 20px);
+            max-height: calc(100% - 20px);
+            overflow-y: auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            padding: 16px;
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+            z-index: 100;
+        }
+        .news-config-panel.open {
+            display: flex;
+        }
+        .news-config-section {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .news-config-section label {
+            font-size: 13px;
+            color: #3a3a3c;
+            font-weight: 600;
+        }
+        .news-config-section input,
+        .news-config-section textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px 10px;
+            border: 1px solid #d1d1d6;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: inherit;
+        }
+        .news-config-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        .news-config-panel .hint {
+            font-size: 12px;
+            color: #8e8e93;
+            line-height: 1.4;
         }
         #panel-news iframe, #panel-project iframe {
             width: 100%;
@@ -1311,6 +1471,17 @@
         #chat-header-title { font-family: var(--font-display) !important; font-size: 16px !important; color: var(--ink) !important; }
         #quick-actions { background: var(--paper) !important; border-color: var(--line) !important; }
         #input-area { background: var(--card) !important; border-color: var(--line) !important; }
+        .user-profile-card { background: var(--card) !important; border-color: var(--line) !important; color: var(--ink) !important; box-shadow: 0 1px 4px rgba(28,24,19,0.06) !important; }
+        .user-avatar { background: var(--paper-2) !important; border-color: var(--line) !important; color: var(--ink) !important; }
+        .user-name { color: var(--ink) !important; }
+        .user-id { color: var(--ink-3) !important; }
+        .user-menu-btn { background: var(--paper-2) !important; color: var(--ink-3) !important; }
+        .user-menu-btn:hover { background: var(--line) !important; color: var(--ink) !important; }
+        .user-menu { background: var(--card) !important; border-color: var(--line) !important; box-shadow: 0 6px 24px rgba(28,24,19,0.15) !important; }
+        .user-menu-item { color: var(--ink) !important; }
+        .user-menu-item:hover { background: var(--paper) !important; }
+        .user-menu-item.active { background: var(--paper-2) !important; }
+        .menu-avatar { background: var(--paper-2) !important; border-color: var(--line) !important; color: var(--ink) !important; }
         .sidebar-section-title { color: var(--ink-3) !important; font-family: var(--font-sans) !important; }
         .panel-section-title { color: var(--ink-3) !important; }
         .task-item { background: var(--paper-2) !important; border-color: var(--line) !important; }
@@ -1375,8 +1546,16 @@
                 <div id="taskHistoryPanel" class="task-list"></div>
             </div>
             <div class="sidebar-section" id="userSection">
-                <div class="sidebar-section-title">销售人员</div>
-                <select id="userSelect"></select>
+                <select id="userSelect" style="display:none;"></select>
+                <div class="user-profile-card">
+                    <div class="user-avatar" id="userAvatar">?</div>
+                    <div class="user-info">
+                        <div class="user-name" id="userName">加载中…</div>
+                        <div class="user-id" id="userId"></div>
+                    </div>
+                    <button class="user-menu-btn" id="userMenuBtn" title="切换用户">⋯</button>
+                </div>
+                <div class="user-menu" id="userMenu"></div>
             </div>
         </aside>
 
@@ -1442,6 +1621,25 @@
 
             <!-- 资讯看板 -->
             <div id="panel-news" class="panel">
+                <div id="newsConfigPanel" class="news-config-panel">
+                    <div class="news-config-section">
+                        <label>采集公众号</label>
+                        <div class="account-tags" id="newsAccountTags"></div>
+                        <input type="text" id="newsAccountInput" placeholder="公众号，回车添加">
+                    </div>
+                    <div class="news-config-section">
+                        <label>Token</label>
+                        <input type="text" id="newsTokenInput" placeholder="mp.weixin.qq.com 地址栏 token= 后的数字">
+                    </div>
+                    <div class="news-config-section">
+                        <label>Cookie</label>
+                        <textarea id="newsCookieInput" rows="3" placeholder="F12 → Network → 任一 mp.weixin.qq.com 请求 → 复制完整 Cookie"></textarea>
+                    </div>
+                    <div class="news-config-actions">
+                        <button id="newsRefreshBtn" class="new-task-btn">🔄 更新</button>
+                    </div>
+                    <div class="hint">凭证只会写入本地 credentials.json，不会出现在服务端日志。</div>
+                </div>
                 <iframe src="/wechat_kb" id="newsPanelIframe" title="行业资讯库"></iframe>
             </div>
 
@@ -1488,6 +1686,11 @@
         const sendBtn = document.getElementById("send");
         const reconnectBtn = document.getElementById("reconnect");
         const userSelect = document.getElementById("userSelect");
+        const userAvatar = document.getElementById("userAvatar");
+        const userName = document.getElementById("userName");
+        const userId = document.getElementById("userId");
+        const userMenuBtn = document.getElementById("userMenuBtn");
+        const userMenu = document.getElementById("userMenu");
         const newTaskBtn = document.getElementById("newTaskBtn");
         const statusDot = document.getElementById("statusDot");
         const statusText = document.getElementById("statusText");
@@ -1504,6 +1707,22 @@
 
         let currentThreadId = null;
         let pendingAttachments = [];
+
+        // 轻量 toast
+        function toast(message, duration = 2200) {
+            const existing = document.getElementById("toast-msg");
+            if (existing) existing.remove();
+            const el = document.createElement("div");
+            el.id = "toast-msg";
+            el.textContent = message;
+            el.style.cssText = "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(28,24,19,.88);color:#f4efe4;padding:10px 18px;border-radius:8px;font-size:14px;z-index:9999;box-shadow:0 8px 30px rgba(0,0,0,.2);pointer-events:none;opacity:0;transition:opacity .25s ease";
+            document.body.appendChild(el);
+            requestAnimationFrame(() => el.style.opacity = "1");
+            setTimeout(() => {
+                el.style.opacity = "0";
+                setTimeout(() => el.remove(), 250);
+            }, duration);
+        }
 
         // 当前在右侧面板展示的任务 ID
         let activeTaskId = null;
@@ -1791,11 +2010,13 @@
                 if (!res.ok) throw new Error("加载用户失败");
                 const users = await res.json();
                 userSelect.innerHTML = "";
+                userMenu.innerHTML = "";
                 if (users.length === 0) {
                     const opt = document.createElement("option");
                     opt.value = "web_user";
                     opt.textContent = "默认用户";
                     userSelect.appendChild(opt);
+                    updateUserProfile({ user_id: "web_user", name: "默认用户" });
                     return;
                 }
                 users.forEach(u => {
@@ -1803,12 +2024,59 @@
                     opt.value = u.user_id;
                     opt.textContent = `${u.name} (${u.user_id})`;
                     userSelect.appendChild(opt);
+
+                    const item = document.createElement("div");
+                    item.className = "user-menu-item";
+                    item.dataset.userId = u.user_id;
+                    item.innerHTML = `<div class="menu-avatar">${getInitial(u.name)}</div><span>${u.name}</span>`;
+                    item.addEventListener("click", () => {
+                        setCurrentUser(u.user_id);
+                        userMenu.classList.remove("open");
+                    });
+                    userMenu.appendChild(item);
                 });
+                setCurrentUser(users[0].user_id, true);
             } catch (e) {
                 console.error(e);
                 append("加载销售人员失败，请刷新页面重试", "error");
             }
         }
+
+        function getInitial(name) {
+            if (!name) return "?";
+            return name.trim().charAt(0);
+        }
+
+        function updateUserProfile(user) {
+            userAvatar.textContent = getInitial(user.name);
+            userName.textContent = user.name || user.user_id;
+            userId.textContent = user.user_id;
+        }
+
+        function setCurrentUser(userId, silent = false) {
+            userSelect.value = userId;
+            const option = Array.from(userSelect.options).find(o => o.value === userId);
+            if (option) {
+                const name = option.textContent.split(" (")[0];
+                updateUserProfile({ user_id: option.value, name });
+            }
+            Array.from(userMenu.children).forEach(item => {
+                item.classList.toggle("active", item.dataset.userId === userId);
+            });
+            if (!silent) {
+                userSelect.dispatchEvent(new Event("change"));
+            }
+        }
+
+        userMenuBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            userMenu.classList.toggle("open");
+        });
+        document.addEventListener("click", (e) => {
+            if (!userMenu.contains(e.target) && e.target !== userMenuBtn) {
+                userMenu.classList.remove("open");
+            }
+        });
 
         function setConnectionStatus(state) {
             statusDot.className = "status-dot " + state;
@@ -2305,37 +2573,126 @@
             btn.addEventListener("click", () => switchPanel(btn.dataset.panel));
         });
 
-        // 资讯看板刷新按钮：注入到 iframe 的 tab 栏里，放在「文章库」前面
+        // 资讯看板：账号 tag 输入 + 凭证配置 + 更新
         const newsPanelIframe = document.getElementById("newsPanelIframe");
-        function injectNewsRefreshButton() {
+        const newsAccountInput = document.getElementById("newsAccountInput");
+        const newsAccountTags = document.getElementById("newsAccountTags");
+        const newsCfgToggle = document.getElementById("newsCfgToggle");
+        const newsConfigPanel = document.getElementById("newsConfigPanel");
+        const newsTokenInput = document.getElementById("newsTokenInput");
+        const newsCookieInput = document.getElementById("newsCookieInput");
+        const newsRefreshBtn = document.getElementById("newsRefreshBtn");
+        const newsAccounts = new Set();
+
+        function renderNewsAccountTags() {
+            if (!newsAccountTags) return;
+            newsAccountTags.innerHTML = Array.from(newsAccounts).map(acc => `
+                <span class="account-tag" data-account="${escapeHtml(acc)}">
+                    ${escapeHtml(acc)}
+                    <span class="remove">×</span>
+                </span>
+            `).join("");
+            newsAccountTags.querySelectorAll(".account-tag .remove").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    const tag = btn.closest(".account-tag");
+                    if (tag) newsAccounts.delete(tag.dataset.account);
+                    renderNewsAccountTags();
+                });
+            });
+        }
+
+        function addNewsAccount(raw) {
+            const name = raw.replace(/[,，\s]+/g, "").trim();
+            if (!name) return;
+            newsAccounts.add(name);
+            renderNewsAccountTags();
+        }
+
+        async function loadNewsAccounts() {
+            try {
+                const res = await fetch("/api/news_accounts");
+                if (!res.ok) return;
+                const data = await res.json();
+                (data.accounts || []).forEach((a) => {
+                    if (a && a.name) newsAccounts.add(a.name);
+                });
+                renderNewsAccountTags();
+            } catch (e) {
+                console.error("加载公众号列表失败:", e);
+            }
+        }
+
+        if (newsAccountInput) {
+            newsAccountInput.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === "," || e.key === "，") {
+                    e.preventDefault();
+                    addNewsAccount(newsAccountInput.value);
+                    newsAccountInput.value = "";
+                } else if (e.key === "Backspace" && !newsAccountInput.value) {
+                    const arr = Array.from(newsAccounts);
+                    if (arr.length) {
+                        newsAccounts.delete(arr[arr.length - 1]);
+                        renderNewsAccountTags();
+                    }
+                }
+            });
+            newsAccountInput.addEventListener("blur", () => {
+                if (newsAccountInput.value.trim()) {
+                    addNewsAccount(newsAccountInput.value);
+                    newsAccountInput.value = "";
+                }
+            });
+            loadNewsAccounts();
+        }
+
+        // 在 iframe 的 tab 栏里注入“设置”按钮
+        function injectNewsSettingsButton() {
             try {
                 const iframeDoc = newsPanelIframe.contentDocument || newsPanelIframe.contentWindow?.document;
                 if (!iframeDoc) return;
                 const tabs = iframeDoc.getElementById("tabs");
-                if (!tabs || iframeDoc.getElementById("news-refresh-btn")) return;
+                if (!tabs || iframeDoc.getElementById("news-settings-btn")) return;
                 const btn = iframeDoc.createElement("button");
-                btn.id = "news-refresh-btn";
+                btn.id = "news-settings-btn";
                 btn.className = "tab";
-                btn.textContent = "🔄 更新";
+                btn.textContent = "⚙️";
+                btn.title = "采集设置";
                 btn.style.cssText = "margin-right:10px;font-weight:600;";
                 btn.addEventListener("click", (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    refreshNewsPanel(btn);
+                    if (window.parent && window.parent.toggleNewsSettings) {
+                        window.parent.toggleNewsSettings();
+                    }
                 });
                 tabs.insertBefore(btn, tabs.firstChild);
             } catch (e) {
-                console.error("注入资讯刷新按钮失败:", e);
+                console.error("注入资讯设置按钮失败:", e);
             }
         }
         if (newsPanelIframe) {
-            newsPanelIframe.addEventListener("load", injectNewsRefreshButton);
-            // 如果 iframe 已经加载完成，立即注入
+            newsPanelIframe.src = `/wechat_kb?t=${Date.now()}`;
+            newsPanelIframe.addEventListener("load", injectNewsSettingsButton);
             if (newsPanelIframe.contentDocument?.readyState === "complete") {
-                injectNewsRefreshButton();
+                injectNewsSettingsButton();
             }
         }
-        // 暴露给 iframe 调用
+
+        // 弹窗开关
+        window.toggleNewsSettings = () => {
+            if (newsConfigPanel) newsConfigPanel.classList.toggle("open");
+        };
+        if (newsConfigPanel) {
+            newsConfigPanel.addEventListener("click", (e) => e.stopPropagation());
+            document.addEventListener("click", () => {
+                newsConfigPanel.classList.remove("open");
+            });
+        }
+
+        if (newsRefreshBtn) {
+            newsRefreshBtn.addEventListener("click", () => refreshNewsPanel(newsRefreshBtn));
+        }
         window.refreshNewsPanel = refreshNewsPanel;
 
         // ========== 项目看板加载 ==========
@@ -2355,8 +2712,13 @@
                 }
             } catch (e) {
                 console.error("加载项目账户失败:", e);
-                projectAccounts = [{ name: "环平保险" }];
+                projectAccounts = [{ name: "环平保险", source: "feishu" }];
             }
+        }
+
+        function getCurrentProjectSource() {
+            const found = projectAccounts.find(a => a.name === currentProjectAccount);
+            return found?.source || "feishu";
         }
 
         function renderProjectAccountSelector() {
@@ -2423,22 +2785,81 @@
         }
 
         async function refreshNewsPanel(btn) {
+            const accounts = Array.from(newsAccounts);
+            if (accounts.length === 0 && newsAccountInput) {
+                addNewsAccount(newsAccountInput.value);
+                newsAccountInput.value = "";
+            }
+            const payload = {
+                accounts: Array.from(newsAccounts),
+                token: newsTokenInput?.value?.trim() || "",
+                cookie: newsCookieInput?.value?.trim() || "",
+            };
             if (btn) {
                 btn.disabled = true;
                 btn.textContent = "更新中…";
             }
+
+            let lastUpdatedAt = 0;
             try {
-                const res = await fetch("/api/refresh_news_panel", { method: "POST" });
-                const result = await res.json().catch(() => ({ message: "已刷新" }));
-                const iframe = document.getElementById("newsPanelIframe");
-                if (iframe) {
-                    iframe.src = `/wechat_kb?t=${Date.now()}`;
-                }
-                if (btn) {
-                    btn.disabled = false;
-                    btn.textContent = "🔄 更新";
+                const statusRes = await fetch("/api/news_status");
+                if (statusRes.ok) {
+                    const status = await statusRes.json();
+                    lastUpdatedAt = status.updatedAtTimestamp || 0;
                 }
             } catch (e) {
+                // ignore, fall back to polling
+            }
+
+            try {
+                const res = await fetch("/api/refresh_news_panel", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                const result = await res.json().catch(() => ({ message: "已触发更新" }));
+                if (!res.ok) {
+                    throw new Error(result.error || `请求失败 ${res.status}`);
+                }
+                toast(result.message || "已开始更新资讯看板");
+                if (newsConfigPanel) newsConfigPanel.classList.remove("open");
+
+                // 轮询 digest.html 更新时间，变化后自动刷新 iframe
+                const pollInterval = 5000;
+                const maxWait = 5 * 60 * 1000;
+                let elapsed = 0;
+                const timer = setInterval(async () => {
+                    elapsed += pollInterval;
+                    try {
+                        const statusRes = await fetch("/api/news_status");
+                        if (!statusRes.ok) return;
+                        const status = await statusRes.json();
+                        if (status.updatedAtTimestamp && status.updatedAtTimestamp !== lastUpdatedAt) {
+                            clearInterval(timer);
+                            if (newsPanelIframe) {
+                                newsPanelIframe.src = `/wechat_kb?t=${Date.now()}`;
+                            }
+                            toast("资讯看板已更新");
+                            if (btn) {
+                                btn.disabled = false;
+                                btn.textContent = "🔄 更新";
+                            }
+                        }
+                    } catch (e) {
+                        // ignore polling errors
+                    }
+                    if (elapsed >= maxWait) {
+                        clearInterval(timer);
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = "🔄 更新";
+                        }
+                        toast("资讯看板更新时间较长，请稍后手动刷新");
+                    }
+                }, pollInterval);
+            } catch (e) {
+                console.error("刷新资讯看板失败:", e);
+                toast(`刷新失败：${e.message || "请稍后重试"}`);
                 if (btn) {
                     btn.disabled = false;
                     btn.textContent = "🔄 更新";
@@ -2448,6 +2869,8 @@
 
         function renderProjectPanel(data) {
             const account = data.account_name || "客户";
+            const source = getCurrentProjectSource();
+            const sourceLabel = source === "dingtalk" ? "钉钉群" : source === "hybrid" ? "混合来源" : "飞书群";
             const signals = (data.signals || []).map((s, i) => `
                 <div class="project-signal ${signalClass(s.type)}" data-signal-idx="${i}">
                     <div class="signal-header">
@@ -2489,7 +2912,7 @@
                     <div class="project-header">
                         <div class="panel-header-row">
                             ${renderProjectAccountSelector()}
-                            <span class="project-meta">来源：飞书群 · 最近更新 ${new Date().toLocaleString()}</span>
+                            <span class="project-meta">来源：${sourceLabel} · 最近更新 ${new Date().toLocaleString()}</span>
                             <button class="panel-refresh-btn" id="refreshProjectPanel">🔄 更新</button>
                         </div>
                     </div>

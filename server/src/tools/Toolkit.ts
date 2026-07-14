@@ -10,6 +10,7 @@ import { searchWebTool } from "./searchWeb.ts";
 import { createTodoTool, createPlanTool } from "./todoTools.ts";
 
 import { readFeishuMessagesTool } from "./readFeishuMessages.ts";
+import { readDingtalkMessagesTool } from "./readDingtalkMessages.ts";
 
 import { readDocumentTool } from "./readDocument.ts";
 import { readFileTool } from "./readFile.ts";
@@ -19,6 +20,7 @@ export function createTools(userId: string): AgentTool[] {
     getTimeTool,
     getNewsDigestTool,
     readFeishuMessagesTool,
+    readDingtalkMessagesTool,
     searchWebTool,
     fetchWebpageTool,
     browseOpenTool,

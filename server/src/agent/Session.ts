@@ -85,6 +85,7 @@ export class AgentSession {
 - search_industry_news：按关键词在销销知识库/资讯工作台搜索文章（适合查某个客户/主题相关的文章）
 - get_news_digest：读取资讯看板（/wechat_kb）整体最新摘要，包含主题、文章标题摘要、线索库。当用户问'总结资讯看板'、'今天有什么资讯'、'最近行业动态'时优先调用
 - read_feishu_messages：读取指定客户的飞书群原始聊天记录。销销会定期通过飞书 CLI 从客户群、内部群拉取消息，原始记录保存在 data/projects/{客户名}_messages.json。当用户提及'飞书群'、'群里'、'客户群'、'内部群'、追问某条项目看板信号背景、或需要基于原始聊天内容分析时优先调用
+- read_dingtalk_messages：读取指定客户/项目的钉钉群原始聊天记录。销销会定期通过钉钉 CLI（dws）从客户群、项目群拉取消息，原始记录保存在 data/projects/{客户名}_messages.json。当用户提及'钉钉群'、'项目群'、追问钉钉项目看板信号背景、或需要基于原始聊天内容分析时优先调用
 - get_contacts / get_deals / get_activities：查询联系人、商机、活动记录
 - log_activity：将跟进活动写入 CRM
 - save_account_research：把研究摘要写回客户资料的 research_summary 字段

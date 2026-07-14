@@ -75,10 +75,19 @@ server/
 ## 文件上传与多模态消息
 
 - `POST /api/upload?user_id=&thread_id=` 接收 multipart 文件，保存到 `data/uploads/<userId>/<threadId>/<uuid>-<safeName>`。
-- 允许类型：图片（png/jpg/gif/webp）、PDF、Word、Excel、PPT；单文件 10MB 上限。
+- 允许类型：图片（png/jpg/gif/webp）、PDF、Word（.docx）、Excel（.xls/.xlsx）、PPT（.pptx）、HTML；单文件 10MB 上限。
 - 上传后返回 `{ name, url, mimeType, size }`，`url` 为 `/data/uploads/...`，由 `/data` 静态资源挂载直接服务。
 - WebSocket `/ws/chat` 消息支持 `attachments` 字段；图片作为 `image_url` 进入 LLM prompt，文档以文件名+链接进入文本 prompt。
-- 附件元数据同时写入 `conversation_threads.files_json`，用户消息文本中包含 `[附件]` 描述以便历史渲染。
+- Agent 通过 `read_file`（文本/HTML/JSON/CSV 等）和 `read_document`（Word/Excel/PPT/PDF）工具读取文档内容；系统 prompt 要求用户上传文档后必须调用对应工具，不得以"无法读取本地文件"为由拒绝。
+
+## 资讯看板
+
+- `/wechat_kb` 由 `src/routes/wechatKb.ts` 直接服务 `third_party/wechat-digest-skill/output/digest.html`。
+- `POST /api/refresh_news_panel` 接收 JSON `{ accounts, token, cookie, since?, count? }`：
+  - 把 `token`/`cookie` 写入 `third_party/wechat-digest-skill/credentials.json`；
+  - 按 `accounts`（公众号名称数组）执行 `wechat_collector.py collect` → `analyze_kb.py` → `render_html.py`；
+  - 立即返回“已开始采集”提示，后台 detached 执行。
+- 前端 `public/chat.html` 提供账号 tag 输入、可折叠的 token/cookie 配置面板和“更新”按钮。
 
 ## 常用命令
 

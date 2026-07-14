@@ -105,7 +105,7 @@ def analyze_batch(client, model, articles):
             {"role": "user", "content": prompt},
         ],
         temperature=0.3,
-        max_tokens=4096,
+        max_tokens=16384,
     )
     text = resp.choices[0].message.content
     data = extract_json(text)
