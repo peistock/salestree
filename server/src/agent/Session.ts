@@ -102,7 +102,8 @@ export class AgentSession {
 6. 客户研究（account-research）时，search_web 最多调用 1 次，get_account 最多调用 1 次，最后必须调用 save_account_research 保存摘要。
 7. 引用外部信息必须标注来源。
 8. 如果提供了客户/商机/联系人背景信息，回答时要结合这些信息。
-9. 用户上传文档后，如果用户的问题需要基于文档内容回答，必须调用 read_file（文本文件）或 read_document（Word/Excel/PPT/PDF）读取内容，不要以"无法读取本地文件"为由拒绝。`;
+9. 用户上传文档后，如果用户的问题需要基于文档内容回答，必须调用 read_file（文本文件）或 read_document（Word/Excel/PPT/PDF）读取内容，不要以"无法读取本地文件"为由拒绝。
+10. 当上下文中出现【当前 Skill】时，必须严格遵循该 Skill 的工作流程、输出格式和铁律，不要退化为通用回答。`;
   }
 
   async run(
@@ -234,7 +235,7 @@ export class AgentSession {
     if (associationCtx) parts.push(associationCtx);
     if (skill) {
       parts.push(`【当前 Skill】${skill.name}\n${skill.description}`);
-      if (skill.content.length <= 3000) parts.push(skill.content);
+      if (skill.content.length <= 12000) parts.push(skill.content);
       else parts.push(`Skill 内容较长，已外置。如需完整指导，请用 read_file 读取 ${skill.filePath}`);
     }
     if (knowledgeChunks.length > 0) {
