@@ -6,6 +6,19 @@ description: |
   触发词：做 pptx、出 slides、做 deck、把策略做成 ppt、生成交付稿、deck 排版、套 UI 风格、复刻 ppt 样式、比稿 ppt、投流方案 ppt。
   上游：先用 marketing-plan / account-research 把策略内容定稿；本 skill 不负责策略推导。
   不适用：纯文字策略推导（用 marketing-plan）；只改已有 ppt 的零星文字（直接改即可）；生成图片型海报（用 baoyu-slide-deck / ppt-master）。
+triggers:
+  - 比稿ppt
+  - 投流方案ppt
+  - 做ppt
+  - 做pptx
+  - 出slides
+  - 做deck
+  - deck排版
+  - 套ui风格
+  - 复刻ppt
+  - 生成ppt
+  - 交付稿
+  - 策略做成ppt
 ---
 
 # 比稿 PPTX 工程化
