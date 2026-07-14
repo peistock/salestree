@@ -1397,7 +1397,7 @@
                     <div id="attachmentPreview" class="attachment-preview"></div>
                     <div id="input-area">
                         <button id="attachBtn" class="attach-btn" title="上传附件">📎</button>
-                        <input type="file" id="fileInput" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" style="display:none;">
+                        <input type="file" id="fileInput" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.html" style="display:none;">
                         <input type="text" id="message" placeholder="等待连接…" autocomplete="off" disabled>
                         <button id="send" disabled>发送</button>
                         <button id="stop" style="display:none;">停止</button>
@@ -1467,7 +1467,7 @@
         <div id="floating-chat-attachment-preview" class="attachment-preview"></div>
         <div id="floating-chat-input-area">
             <button id="floating-chat-attach" class="attach-btn" title="上传附件">📎</button>
-            <input type="file" id="floating-chat-file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" style="display:none;">
+            <input type="file" id="floating-chat-file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.html" style="display:none;">
             <input type="text" id="floating-chat-input" placeholder="跟销销说点什么…" autocomplete="off">
             <button id="floating-chat-send">发送</button>
         </div>
@@ -1572,6 +1572,7 @@
                 xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 ppt: "application/vnd.ms-powerpoint",
                 pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                html: "text/html",
             };
             return map[ext] || "application/octet-stream";
         }

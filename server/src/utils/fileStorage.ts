@@ -23,6 +23,8 @@ export const ALLOWED_UPLOAD_TYPES = new Set([
   "application/vnd.ms-powerpoint",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+  // web page
+  "text/html",
 ]);
 
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10 MB
