@@ -462,7 +462,7 @@ function createProviderFromConfig(cfg: ProviderConfig): Provider<Api> {
         input: ["text", "image"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 32768,
-        maxTokens: 4096,
+        maxTokens: 16384,
       } satisfies Model<"openai-completions">,
     ],
     api: openAICompletionsApi(),
