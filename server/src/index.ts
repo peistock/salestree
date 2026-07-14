@@ -2,6 +2,7 @@ import "dotenv/config";
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import staticPlugin from "@fastify/static";
+import multipart from "@fastify/multipart";
 import path from "path";
 import fs from "fs";
 import { exec } from "child_process";
@@ -15,6 +16,7 @@ import { legacyProxyRoutes } from "./routes/proxy.ts";
 import { wechatKbRoutes } from "./routes/wechatKb.ts";
 import { companyLeadsRoutes } from "./routes/companyLeads.ts";
 import { salesPolicyRoutes } from "./routes/policy.ts";
+import { uploadRoutes } from "./routes/upload.ts";
 import { ConversationStore } from "./memory/ConversationStore.ts";
 
 const conversationStore = new ConversationStore();
@@ -26,7 +28,9 @@ const app = Fastify({ logger: true });
 
 async function main() {
   await app.register(websocket);
+  await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   await app.register(healthRoutes);
+  await app.register(uploadRoutes);
   await app.register(wsChatRoutes);
   await app.register(wechatKbRoutes);
   await app.register(companyLeadsRoutes);

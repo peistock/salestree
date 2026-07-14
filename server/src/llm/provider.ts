@@ -459,7 +459,7 @@ function createProviderFromConfig(cfg: ProviderConfig): Provider<Api> {
         provider: providerId,
         baseUrl: cfg.baseUrl,
         reasoning: false,
-        input: ["text"],
+        input: ["text", "image"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 32768,
         maxTokens: 4096,

@@ -19,7 +19,16 @@ export interface OutgoingMessage {
   files?: string[];
   found_files?: string[];
   hint?: string;
+  thread_id?: string;
   messages?: { role: "user" | "assistant"; content: string }[];
+}
+
+export interface Attachment {
+  name: string;
+  url: string;
+  mimeType: string;
+  size: number;
+  data?: string; // base64 for images
 }
 
 export class AgentSession {
@@ -93,7 +102,11 @@ export class AgentSession {
 8. 如果提供了客户/商机/联系人背景信息，回答时要结合这些信息。`;
   }
 
-  async run(query: string, send: (msg: OutgoingMessage) => void): Promise<OutgoingMessage> {
+  async run(
+    query: string,
+    attachments: Attachment[],
+    send: (msg: OutgoingMessage) => void,
+  ): Promise<OutgoingMessage> {
     this.chunks = [];
     this.finalText = "";
     this.turnCount = 0;
@@ -104,17 +117,42 @@ export class AgentSession {
 
     await scanAndNotify(this.userId, "user_message", query);
 
-    // 先持久化用户原始消息，刷新页面后也能看到
-    await this.conversationStore.addMessage(this.userId, this.threadId, "user", query).catch((err) => {
+    // 持久化用户原始消息（包含附件描述），刷新页面后也能看到
+    const attachmentDesc = attachments.length
+      ? "\n\n[附件]\n" + attachments.map((a) => `- ${a.name}：${a.url}`).join("\n")
+      : "";
+    const persistedUserMessage = query ? `${query}${attachmentDesc}` : attachmentDesc.trim();
+    await this.conversationStore.addMessage(this.userId, this.threadId, "user", persistedUserMessage).catch((err) => {
       console.error("[session] 持久化用户消息失败:", err);
     });
 
+    // 把附件元数据追加到线程级 files_json
+    if (attachments.length > 0) {
+      try {
+        const thread = await this.conversationStore.getThread(this.userId, this.threadId);
+        const existing = (thread?.files_json as Attachment[]) ?? [];
+        const merged = [...existing, ...attachments];
+        await this.conversationStore.updateThreadMeta(this.userId, this.threadId, { files_json: merged });
+      } catch (err) {
+        console.error("[session] 更新线程附件失败:", err);
+      }
+    }
+
     const contextText = await this.buildContextText(query);
+    const docAttachments = attachments.filter((a) => !a.mimeType.startsWith("image/"));
+    const docList = docAttachments.length
+      ? "\n\n用户上传的文档（仅文件名和链接，需自行读取）：\n" +
+        docAttachments.map((a) => `- ${a.name} (${a.url})`).join("\n")
+      : "";
+    const promptText = `${contextText}\n\n用户问题：${query}${docList}`;
+
     const now = Date.now();
-    const promptText = `${contextText}\n\n用户问题：${query}`;
-    const promptMessages: AgentMessage[] = [
-      { role: "user", content: promptText, timestamp: now },
-    ];
+    const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/") && a.data);
+    const promptContent: any[] = [{ type: "text", text: promptText }];
+    for (const img of imageAttachments) {
+      promptContent.push({ type: "image", data: img.data, mimeType: img.mimeType });
+    }
+    const promptMessages = [{ role: "user", content: promptContent, timestamp: now }] as AgentMessage[];
 
     this.agent.subscribe((event) => {
       if (event.type === "turn_end") {

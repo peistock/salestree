@@ -1,13 +1,23 @@
 import type { FastifyInstance } from "fastify";
 import { createHash } from "crypto";
+import fs from "fs";
+import { resolveUploadPath } from "../utils/fileStorage.ts";
 import { AgentSession, type OutgoingMessage } from "../agent/Session.ts";
 import { ConversationStore } from "../memory/ConversationStore.ts";
+
+interface AttachmentMeta {
+  name: string;
+  url: string;
+  mimeType: string;
+  size: number;
+}
 
 interface ClientMessage {
   user_id?: string;
   message?: string;
   action?: "hello" | "stop" | "new_thread";
   title?: string;
+  attachments?: AttachmentMeta[];
 }
 
 interface HistoryMessage {
@@ -78,6 +88,7 @@ export async function wsChatRoutes(app: FastifyInstance) {
           }));
           send({
             type: "history",
+            thread_id: threadId,
             hint: history.length > 0 ? "已恢复当前对话" : undefined,
             messages: history,
           } as OutgoingMessage);
@@ -105,13 +116,15 @@ export async function wsChatRoutes(app: FastifyInstance) {
         return;
       }
 
-      const message = data.message?.trim();
-      if (!message) {
+      const message = data.message?.trim() || "";
+      const attachments = data.attachments || [];
+      if (!message && attachments.length === 0) {
         send({ type: "error", message: "消息不能为空" });
         return;
       }
 
-      const key = dedupKey(userId, message);
+      const attachmentSummary = attachments.map((a) => `${a.name}(${a.mimeType})`).join("|");
+      const key = dedupKey(userId, `${message}::${attachmentSummary}`);
       if (isDuplicate(key)) {
         send({ type: "status", message: "消息正在处理中，请勿重复发送" });
         return;
@@ -129,11 +142,25 @@ export async function wsChatRoutes(app: FastifyInstance) {
         return;
       }
 
+      // 为图片附件读取本地 base64 数据
+      const attachmentsWithData = attachments.map((a) => {
+        if (a.mimeType.startsWith("image/")) {
+          try {
+            const rel = a.url.replace("/data/uploads/", "");
+            const buffer = fs.readFileSync(resolveUploadPath(rel));
+            return { ...a, data: buffer.toString("base64") };
+          } catch (err) {
+            console.error("[ws] 读取图片失败:", a.url, err);
+          }
+        }
+        return a;
+      });
+
       const session = new AgentSession(userId, "", threadId, conversationStore);
       activeSessions.set(userId, session);
 
       send({ type: "status", message: "销销正在思考…" });
-      const result = await session.run(message, send);
+      const result = await session.run(message, attachmentsWithData, send);
       send(result);
       activeSessions.delete(userId);
     });

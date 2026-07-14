@@ -258,6 +258,85 @@
             display: flex;
             gap: 12px;
         }
+        .attach-btn {
+            padding: 10px 12px;
+            border: 1px solid #d1d1d6;
+            border-radius: 22px;
+            background: #f9f9fb;
+            font-size: 18px;
+            line-height: 1;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .attach-btn:hover { background: #f0f7ff; border-color: #007aff; }
+        .attach-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .attachment-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 10px 24px;
+            background: #f9f9fb;
+            border-top: 1px solid #e5e5ea;
+        }
+        .attachment-preview:empty { display: none; }
+        .attachment-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            background: #ffffff;
+            border: 1px solid #e5e5ea;
+            border-radius: 10px;
+            font-size: 13px;
+            max-width: 220px;
+        }
+        .attachment-item img {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+        .attachment-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .attachment-remove {
+            cursor: pointer;
+            color: #8e8e93;
+            font-weight: bold;
+            padding: 0 2px;
+        }
+        .attachment-remove:hover { color: #ff3b30; }
+        #floating-chat-attachment-preview {
+            padding: 8px 10px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        #floating-chat-attachment-preview .attachment-item {
+            max-width: 160px;
+            font-size: 12px;
+        }
+        .conversation-turn {
+            margin-bottom: 14px;
+            line-height: 1.55;
+        }
+        .conversation-turn strong {
+            display: block;
+            font-size: 12px;
+            color: #8e8e93;
+            margin-bottom: 4px;
+        }
+        .conversation-turn-body {
+            background: #f9f9fb;
+            border-radius: 10px;
+            padding: 10px 12px;
+            border: 1px solid #e5e5ea;
+        }
+        .user-turn .conversation-turn-body {
+            background: #e5f2ff;
+            border-color: #007aff;
+        }
         #quick-actions {
             display: flex;
             gap: 10px;
@@ -1312,7 +1391,10 @@
                         <button class="quick-action" data-prompt="开始销售教练：你来当客户，模拟一次上门拜访">销售教练</button>
                         <button class="quick-action" data-prompt="给 【公司名】 出一版整合营销方案">营销方案</button>
                     </div>
+                    <div id="attachmentPreview" class="attachment-preview"></div>
                     <div id="input-area">
+                        <button id="attachBtn" class="attach-btn" title="上传附件">📎</button>
+                        <input type="file" id="fileInput" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" style="display:none;">
                         <input type="text" id="message" placeholder="等待连接…" autocomplete="off" disabled>
                         <button id="send" disabled>发送</button>
                         <button id="stop" style="display:none;">停止</button>
@@ -1379,7 +1461,10 @@
             <button id="floating-chat-close">−</button>
         </div>
         <div id="floating-chat-messages"></div>
+        <div id="floating-chat-attachment-preview" class="attachment-preview"></div>
         <div id="floating-chat-input-area">
+            <button id="floating-chat-attach" class="attach-btn" title="上传附件">📎</button>
+            <input type="file" id="floating-chat-file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" style="display:none;">
             <input type="text" id="floating-chat-input" placeholder="跟销销说点什么…" autocomplete="off">
             <button id="floating-chat-send">发送</button>
         </div>
@@ -1405,6 +1490,12 @@
         const checklistItems = document.getElementById("checklistItems");
         const stopBtn = document.getElementById("stop");
         const taskHistorySection = document.getElementById("taskHistorySection");
+        const attachBtn = document.getElementById("attachBtn");
+        const fileInput = document.getElementById("fileInput");
+        const attachmentPreview = document.getElementById("attachmentPreview");
+
+        let currentThreadId = null;
+        let pendingAttachments = [];
 
         // 当前在右侧面板展示的任务 ID
         let activeTaskId = null;
@@ -1461,6 +1552,202 @@
             return `${d.getHours().toString().padStart(2,"0")}:${d.getMinutes().toString().padStart(2,"0")}`;
         }
 
+        function isImageMime(mime) {
+            return mime && mime.startsWith("image/");
+        }
+
+        function guessMimeType(filename) {
+            const ext = (filename.split(".").pop() || "").toLowerCase();
+            const map = {
+                png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+                gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
+                pdf: "application/pdf",
+                doc: "application/msword",
+                docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                xls: "application/vnd.ms-excel",
+                xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ppt: "application/vnd.ms-powerpoint",
+                pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            };
+            return map[ext] || "application/octet-stream";
+        }
+
+        function parseAttachmentsFromText(text) {
+            const attachments = [];
+            const regex = /-\s*(.+?)\s*：\s*(https?:\/\/\S+|\/\S+)/g;
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                const name = match[1].trim();
+                const url = match[2].trim();
+                attachments.push({ name, url, mimeType: guessMimeType(name) });
+            }
+            return attachments;
+        }
+
+        function renderMessageContent(text) {
+            if (!text) return "";
+            const marker = "[附件]";
+            const idx = text.indexOf(marker);
+            if (idx === -1) {
+                return escapeHtml(text).replace(/\\n/g, "<br>");
+            }
+            const mainText = text.substring(0, idx).trim();
+            const attachmentText = text.substring(idx + marker.length);
+            const attachments = parseAttachmentsFromText(attachmentText);
+            let html = escapeHtml(mainText).replace(/\\n/g, "<br>");
+            if (attachments.length > 0) {
+                html += renderAttachmentItems(attachments);
+            }
+            return html;
+        }
+
+        function renderConversation(text) {
+            if (!text) return "暂无对话记录";
+            const blocks = text.split(/\n\s*\n/);
+            return blocks.map(block => {
+                const userMatch = block.match(/^用户：([\s\S]*)$/);
+                const agentMatch = block.match(/^销销：([\s\S]*)$/);
+                if (userMatch) {
+                    return `<div class="conversation-turn user-turn"><strong>用户</strong><div class="conversation-turn-body">${renderMessageContent(userMatch[1].trim())}</div></div>`;
+                }
+                if (agentMatch) {
+                    return `<div class="conversation-turn agent-turn"><strong>销销</strong><div class="conversation-turn-body">${renderMarkdown(agentMatch[1].trim())}</div></div>`;
+                }
+                return `<div class="conversation-turn"><div class="conversation-turn-body">${renderMessageContent(block.trim())}</div></div>`;
+            }).join("");
+        }
+
+        function renderAttachmentItems(attachments) {
+            if (!attachments || attachments.length === 0) return "";
+            const items = attachments.map(a => {
+                if (isImageMime(a.mimeType)) {
+                    return `<img src="${escapeHtml(a.url)}" class="msg-attachment-img" alt="${escapeHtml(a.name)}">`;
+                }
+                return `<a class="file-link" href="${escapeHtml(a.url)}" target="_blank">📎 ${escapeHtml(a.name)}</a>`;
+            }).join("");
+            return `<div class="msg-attachments">${items}</div>`;
+        }
+
+        function updateAttachmentPreview() {
+            attachmentPreview.innerHTML = pendingAttachments.map((a, idx) => {
+                const thumb = isImageMime(a.mimeType)
+                    ? `<img src="${escapeHtml(a.url)}" alt="">`
+                    : `<span>📎</span>`;
+                return `<div class="attachment-item">${thumb}<span class="attachment-name">${escapeHtml(a.name)}</span><span class="attachment-remove" data-idx="${idx}">×</span></div>`;
+            }).join("");
+            attachmentPreview.querySelectorAll(".attachment-remove").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    const idx = parseInt(e.target.dataset.idx, 10);
+                    pendingAttachments.splice(idx, 1);
+                    updateAttachmentPreview();
+                });
+            });
+        }
+
+        async function uploadFiles(files) {
+            if (!files || files.length === 0) return;
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append("files", file);
+            }
+            const threadId = currentThreadId || "default";
+            try {
+                attachBtn.disabled = true;
+                const res = await fetch(`/api/upload?user_id=${encodeURIComponent(userSelect.value || "web_user")}&thread_id=${encodeURIComponent(threadId)}`, {
+                    method: "POST",
+                    body: formData,
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    append(`上传失败：${escapeHtml(data.error || "未知错误")}`, "error");
+                    return;
+                }
+                pendingAttachments.push(...data.files);
+                updateAttachmentPreview();
+            } catch (err) {
+                console.error("[upload] 失败:", err);
+                append("附件上传失败，请重试", "error");
+            } finally {
+                attachBtn.disabled = false;
+            }
+        }
+
+        function handlePaste(e) {
+            const items = e.clipboardData && e.clipboardData.items;
+            if (!items) return;
+            const files = [];
+            for (const item of items) {
+                if (item.kind === "file") {
+                    const file = item.getAsFile();
+                    if (file) files.push(file);
+                }
+            }
+            if (files.length > 0) {
+                e.preventDefault();
+                uploadFiles(files);
+            }
+        }
+
+        function updateFloatAttachmentPreview() {
+            floatingChatAttachmentPreview.innerHTML = floatPendingAttachments.map((a, idx) => {
+                const thumb = isImageMime(a.mimeType)
+                    ? `<img src="${escapeHtml(a.url)}" alt="">`
+                    : `<span>📎</span>`;
+                return `<div class="attachment-item">${thumb}<span class="attachment-name">${escapeHtml(a.name)}</span><span class="attachment-remove" data-idx="${idx}">×</span></div>`;
+            }).join("");
+            floatingChatAttachmentPreview.querySelectorAll(".attachment-remove").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    const idx = parseInt(e.target.dataset.idx, 10);
+                    floatPendingAttachments.splice(idx, 1);
+                    updateFloatAttachmentPreview();
+                });
+            });
+        }
+
+        async function uploadFloatFiles(files) {
+            if (!files || files.length === 0) return;
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append("files", file);
+            }
+            const threadId = currentThreadId || "default";
+            try {
+                floatingChatAttach.disabled = true;
+                const res = await fetch(`/api/upload?user_id=${encodeURIComponent(userSelect.value || "web_user")}&thread_id=${encodeURIComponent(threadId)}`, {
+                    method: "POST",
+                    body: formData,
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    appendMini(`上传失败：${escapeHtml(data.error || "未知错误")}`, "error");
+                    return;
+                }
+                floatPendingAttachments.push(...data.files);
+                updateFloatAttachmentPreview();
+            } catch (err) {
+                console.error("[upload-float] 失败:", err);
+                appendMini("附件上传失败，请重试", "error");
+            } finally {
+                floatingChatAttach.disabled = false;
+            }
+        }
+
+        function handleFloatPaste(e) {
+            const items = e.clipboardData && e.clipboardData.items;
+            if (!items) return;
+            const files = [];
+            for (const item of items) {
+                if (item.kind === "file") {
+                    const file = item.getAsFile();
+                    if (file) files.push(file);
+                }
+            }
+            if (files.length > 0) {
+                e.preventDefault();
+                uploadFloatFiles(files);
+            }
+        }
+
         async function loadUsers() {
             try {
                 const res = await fetch("/api/users");
@@ -1492,18 +1779,21 @@
                 statusText.textContent = "已连接";
                 sendBtn.disabled = false;
                 messageInput.disabled = false;
+                attachBtn.disabled = false;
                 messageInput.placeholder = "跟销销说点什么…";
                 reconnectBtn.style.display = "none";
             } else if (state === "connecting") {
                 statusText.textContent = "连接中…";
                 sendBtn.disabled = true;
                 messageInput.disabled = true;
+                attachBtn.disabled = true;
                 messageInput.placeholder = "等待连接…";
                 reconnectBtn.style.display = "none";
             } else {
                 statusText.textContent = "已断开";
                 sendBtn.disabled = true;
                 messageInput.disabled = true;
+                attachBtn.disabled = true;
                 messageInput.placeholder = "连接已断开…";
                 reconnectBtn.style.display = "inline-block";
             }
@@ -1533,7 +1823,7 @@
             }
 
             conversationContent.innerHTML = task.conversation
-                ? (typeof marked !== 'undefined' ? marked.parse(task.conversation) : escapeHtml(task.conversation).replace(/\\n/g, "<br>"))
+                ? renderConversation(task.conversation)
                 : "暂无对话记录";
 
             checklistItems.innerHTML = "";
@@ -1802,12 +2092,15 @@
                     else currentStatus.textContent = data.message || "处理中…";
                 } else if (data.type === "history") {
                     // 恢复历史对话到聊天框
+                    if (data.thread_id) {
+                        currentThreadId = data.thread_id;
+                    }
                     if (data.hint) {
                         append(`<em style="color:#888">${escapeHtml(data.hint)}</em>`, "status");
                     }
                     (data.messages || []).forEach(m => {
                         const cls = m.role === "user" ? "user" : "agent";
-                        append(escapeHtml(m.content).replace(/\\n/g, "<br>"), cls);
+                        append(renderMessageContent(m.content), cls);
                     });
                     chat.scrollTop = chat.scrollHeight;
                 } else if (data.type === "token") {
@@ -1846,20 +2139,24 @@
 
         function send() {
             const text = messageInput.value.trim();
-            if (!text) return;
+            if (!text && pendingAttachments.length === 0) return;
             if (!ws || ws.readyState !== WebSocket.OPEN) {
                 append("尚未连接到服务器，请稍等或点击重连", "error");
                 return;
             }
             manualNewTask = false;
-            append(escapeHtml(text).replace(/\\n/g, "<br>"), "user");
+            const bodyHtml = escapeHtml(text).replace(/\\n/g, "<br>") + renderAttachmentItems(pendingAttachments);
+            append(bodyHtml, "user");
+            const payload = { user_id: userSelect.value, message: text, attachments: pendingAttachments };
+            pendingAttachments = [];
+            updateAttachmentPreview();
             messageInput.value = "";
             sendBtn.style.display = "none";
             stopBtn.style.display = "inline-block";
             messageInput.disabled = true;
             streamingMsg = null;
             currentStatus = append("销销正在思考…", "status");
-            ws.send(JSON.stringify({ user_id: userSelect.value, message: text }));
+            ws.send(JSON.stringify(payload));
         }
 
         function finishTurn() {
@@ -1873,6 +2170,16 @@
 
         sendBtn.addEventListener("click", send);
         messageInput.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+        messageInput.addEventListener("paste", handlePaste);
+        document.addEventListener("paste", (e) => {
+            if (document.activeElement === messageInput) return;
+            handlePaste(e);
+        });
+        attachBtn.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", (e) => {
+            uploadFiles(e.target.files);
+            e.target.value = "";
+        });
         stopBtn.addEventListener("click", () => {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
             ws.send(JSON.stringify({ user_id: userSelect.value, action: "stop" }));
@@ -1938,6 +2245,9 @@
         const floatingChatInput = document.getElementById("floating-chat-input");
         const floatingChatSend = document.getElementById("floating-chat-send");
         const floatingChatBadge = document.getElementById("floating-chat-badge");
+        const floatingChatAttach = document.getElementById("floating-chat-attach");
+        const floatingChatFile = document.getElementById("floating-chat-file");
+        const floatingChatAttachmentPreview = document.getElementById("floating-chat-attachment-preview");
 
         function switchPanel(name) {
             panels.forEach(p => p.classList.remove("active"));
@@ -2505,6 +2815,7 @@
         let floatReconnectTimer = null;
         let floatHistorySent = false;
         let floatUnread = 0;
+        let floatPendingAttachments = [];
 
         function appendMini(text, cls = "agent") {
             const div = document.createElement("div");
@@ -2589,7 +2900,7 @@
                     if (data.hint) appendMini(`<em style="color:#888">${escapeHtml(data.hint)}</em>`, "status");
                     (data.messages || []).forEach(m => {
                         const cls = m.role === "user" ? "user" : "agent";
-                        appendMini(escapeHtml(m.content).replace(/\\n/g, "<br>"), cls);
+                        appendMini(renderMessageContent(m.content), cls);
                     });
                     floatingChatMessages.scrollTop = floatingChatMessages.scrollHeight;
                 } else if (data.type === "token") {
@@ -2624,22 +2935,32 @@
 
         function sendFloating() {
             const text = floatingChatInput.value.trim();
-            if (!text) return;
+            if (!text && floatPendingAttachments.length === 0) return;
             if (!wsFloat || wsFloat.readyState !== WebSocket.OPEN) {
                 appendMini("尚未连接到服务器", "error");
                 return;
             }
-            appendMini(escapeHtml(text).replace(/\\n/g, "<br>"), "user");
+            const bodyHtml = escapeHtml(text).replace(/\\n/g, "<br>") + renderAttachmentItems(floatPendingAttachments);
+            appendMini(bodyHtml, "user");
+            const payload = { user_id: userSelect.value, message: text, attachments: floatPendingAttachments };
+            floatPendingAttachments = [];
+            updateFloatAttachmentPreview();
             floatingChatInput.value = "";
             floatingChatInput.disabled = true;
             floatingChatSend.disabled = true;
             floatStreamingMsg = null;
             floatCurrentStatus = appendMini("销销正在思考…", "status");
-            wsFloat.send(JSON.stringify({ user_id: userSelect.value, message: text }));
+            wsFloat.send(JSON.stringify(payload));
         }
 
         floatingChatSend.addEventListener("click", sendFloating);
         floatingChatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendFloating(); });
+        floatingChatInput.addEventListener("paste", handleFloatPaste);
+        floatingChatAttach.addEventListener("click", () => floatingChatFile.click());
+        floatingChatFile.addEventListener("change", (e) => {
+            uploadFloatFiles(e.target.files);
+            e.target.value = "";
+        });
 
         floatingChatToggle.addEventListener("click", () => {
             floatingChatEl.classList.add("open");
