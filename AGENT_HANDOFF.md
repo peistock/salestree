@@ -3,8 +3,8 @@
 ## 这是什么
 
 销销（SalesMind / Xiaoxiaoshu）是一个面向互联网广告/营销公司销售团队的 AI 协作助手。
-- 主服务：TypeScript Fastify（`server/`，端口 8002）
-- 遗留服务：Python FastAPI（`main.py`，端口 8001，可选）
+- 主服务：TypeScript Fastify（`server/`，端口 8001，由 `server/.env` 中 `PORT` 控制）
+- 遗留服务：Python FastAPI（`main.py`，端口 8000/8001，可选）
 - 数据库：PostgreSQL 15 + PGVector（Docker 本地运行，端口 5432）
 - 本地 LLM：LM Studio（默认端口 1234）
 - 管理后台：Streamlit（端口 8501）
@@ -126,7 +126,7 @@ cd server
 npm run dev
 ```
 
-访问 `http://localhost:8002/chat`。
+访问 `http://localhost:8001/chat`。`server/.env` 中 `PORT` 可修改。
 
 Python 遗留服务（可选，仅当需要旧 API 时启动）：
 
@@ -146,7 +146,7 @@ streamlit run dashboard.py --server.port 8501
 - 企微后台 URL：`https://wechat.peistock.win/wechat`
 - Token / EncodingAESKey 与 `.env` 一致
 
-### 7. 启动管理后台
+### 8. 启动管理后台
 
 ```bash
 streamlit run dashboard.py --server.port 8501
@@ -185,7 +185,7 @@ streamlit run dashboard.py --server.port 8501
 4. **企业微信配置必须重新验证**
    - 新机器的公网域名 / IP 如果变化，需要在企微后台更新可信 IP 和回调 URL。
 
-4. **不要提交 `.env`**
+5. **不要提交 `.env`**
    - `.gitignore` 已排除 `.env` 和 `data/uploads/`，不要手动把它们加进版本控制。
 
 ---

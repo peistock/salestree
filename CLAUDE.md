@@ -65,6 +65,8 @@ type: project
        │ 今日关注               │
        │ 紧急插话               │
        │ 记忆透明               │
+       │ LLM 用量看板           │
+       │ 用户与组织管理          │
        └─────────────────────┘
 ```
 
@@ -256,7 +258,7 @@ Agent 收到后，立即在下一次交互中优先关切该客户疑虑。
 | 接入层 | 消息通道（主） | 企业微信自建应用 | 官方 API，稳定 |
 | 接入层 | 消息通道（副） | 微信公众号（订阅号，个人主体） | 已接入但功能受限：个人订阅号无客服消息权限（48001），只能被动回复（5s XML），LLM 处理超时无法使用 |
 | 接入层 | Web 聊天页 + 资讯看板 + 政策看板 | **TypeScript Fastify** (`server/`)，WebSocket `/ws/chat` + `public/chat.html`；`/wechat_kb`、公司线索、销售政策看板均已由 TS 服务直接承载 | 销售人员主要工作界面；资讯/政策看板不再依赖 Python 遗留服务 |
-| 接入层 | 遗留 API（可选） | Python FastAPI (`main.py`) | 仅保留作本地开发/调试入口；生产环境只需 TS 服务（端口 8002）|
+| 接入层 | 遗留 API（可选） | Python FastAPI (`main.py`) | 仅保留作本地开发/调试入口；生产环境只需 TS 服务（端口 8001，`server/.env` 中 `PORT` 可修改）|
 | 接入层 | 公网穿透 | Cloudflare Tunnel | 免费，固定域名 |
 | 语音层 | 格式转换 | FFmpeg | 行业标准 |
 | 语音层 | ASR | mlx-qwen3-asr (Qwen3-ASR-0.6B) | 本地 MLX 加速，中文远优于 whisper |

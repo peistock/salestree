@@ -136,7 +136,7 @@ lsof -i :5432
 
 ### 4. 启动销销（Web 服务）
 
-当前只需暴露 TypeScript 新服务（端口 8002）。`/wechat_kb` 资讯看板页面、`/api/wechat_kb/company_leads` 线索接口均已由 TS 服务直接提供，**无需再启动 Python 遗留服务（端口 8001）**。
+当前只需暴露 TypeScript 新服务（端口 8001）。`/wechat_kb` 资讯看板页面、`/api/wechat_kb/company_leads` 线索接口均已由 TS 服务直接提供，**无需再启动 Python 遗留服务（端口 8000/8001，可选）**。`server/.env` 中 `PORT` 控制实际端口，默认 8001。
 
 ```bash
 cd server
@@ -156,17 +156,17 @@ streamlit run dashboard.py
 
 ### 6. 访问功能
 
-- **协作看板 / 资讯看板 / 项目看板 / 销售政策看板**：`http://localhost:8002/chat` — 与销销对话、查看飞书项目情报、公众号文章与线索库、销售折扣控制线
+- **协作看板 / 资讯看板 / 项目看板 / 销售政策看板**：`http://localhost:8001/chat` — 与销销对话、查看飞书项目情报、公众号文章与线索库、销售折扣控制线
 
 ## 团队部署建议
 
-销销当前默认是「本地开发机」模式。要给同事或家里电脑用，推荐：**只通过 Cloudflare Tunnel 暴露 TS 服务（端口 8002）**。
+销销当前默认是「本地开发机」模式。要给同事或家里电脑用，推荐：**只通过 Cloudflare Tunnel 暴露 TS 服务（端口 8001）**。`server/.env` 中 `PORT` 可修改。
 
 ```yaml
 # ~/.cloudflared/config.yml（示例）
 ingress:
   - hostname: xiaoxiao.peistock.win
-    service: http://localhost:8002
+    service: http://localhost:8001
   - hostname: searxng.peistock.win
     service: http://localhost:8080
   - service: http_status:404
