@@ -20,8 +20,10 @@ import { uploadRoutes } from "./routes/upload.ts";
 import { editorSaveRoutes } from "./routes/editorSave.ts";
 import { adminRoutes } from "./routes/admin.ts";
 import { ConversationStore } from "./memory/ConversationStore.ts";
+import { UserStore } from "./db/userStore.ts";
 
 const conversationStore = new ConversationStore();
+const userStore = new UserStore();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -87,9 +89,15 @@ async function main() {
   await app.register(legacyProxyRoutes);
   await app.register(chatPageRoutes);
 
-  // 兼容旧页面调用的 API 占位
+  // 返回活跃用户列表（与 dashboard 同源）
   app.get("/api/users", async (_req, reply) => {
-    return reply.send([{ user_id: "sales_001", name: "陈沛" }, { user_id: "sales_002", name: "亿树" }]);
+    try {
+      const users = await userStore.listUsers({ activeOnly: true });
+      return reply.send(users.map((u) => ({ user_id: u.userId, name: u.name, role: u.role, status: u.status })));
+    } catch (err) {
+      console.error("[api] /api/users error:", err);
+      return reply.send([{ user_id: "web_user", name: "默认用户" }]);
+    }
   });
 
   app.get("/api/task_history", async (req, reply) => {
