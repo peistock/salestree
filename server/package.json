@@ -15,14 +15,20 @@
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.80.6",
     "@earendil-works/pi-ai": "^0.80.6",
+    "@fastify/multipart": "^10.1.0",
     "@fastify/static": "^10.1.0",
     "@fastify/websocket": "^11.0.0",
+    "@types/xlsx": "^0.0.35",
     "@xenova/transformers": "^2.17.2",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.39.0",
     "fastify": "^5.2.1",
     "gray-matter": "^4.0.3",
-    "pg": "^8.13.1"
+    "mammoth": "^1.12.0",
+    "pdf2json": "^4.0.3",
+    "pg": "^8.13.1",
+    "pptx2json": "^0.0.10",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

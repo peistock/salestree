@@ -1,0 +1,510 @@
+<style>
+.methodology-slide {
+  min-width: 100%;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 5vh 6vw;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg, #FFFFFF);
+  color: var(--ink, #111111);
+  font-family: var(--font-body, "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif);
+}
+.meth-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 2px solid var(--ink, #111);
+  padding-bottom: 1.5vh;
+  margin-bottom: 3vh;
+}
+.meth-tag {
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent, #d81e06);
+}
+.meth-number {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--muted, #888);
+}
+.meth-title {
+  font-size: 3rem;
+  line-height: 1.1;
+  font-weight: 900;
+  margin-bottom: 1.5vh;
+  letter-spacing: -0.02em;
+}
+.meth-subtitle {
+  font-size: 1.4rem;
+  font-weight: 500;
+  color: var(--muted, #666);
+  margin-bottom: 3vh;
+}
+.meth-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 2.5vh;
+  overflow-y: auto;
+}
+.meth-p {
+  font-size: 1.25rem;
+  line-height: 1.7;
+  max-width: 90%;
+}
+.meth-row {
+  display: flex;
+  gap: 3vw;
+}
+.meth-col {
+  flex: 1;
+}
+.meth-box {
+  background: var(--white, #fff);
+  border-left: 6px solid var(--accent, #d81e06);
+  padding: 2.5vh 2vw;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+}
+.meth-box-title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin-bottom: 1.2vh;
+}
+.meth-box-text {
+  font-size: 1.15rem;
+  line-height: 1.7;
+}
+.meth-box-list {
+  font-size: 1.15rem;
+  line-height: 1.8;
+  padding-left: 1.2em;
+}
+.meth-darkbox {
+  background: var(--light-gray, #f4f4f4);
+  padding: 2.5vh 2vw;
+}
+.meth-flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1vw;
+  flex-wrap: wrap;
+}
+.meth-flow-item {
+  flex: 1 1 10%;
+  min-width: 100px;
+  border-top: 4px solid var(--accent, #d81e06);
+  padding-top: 1vh;
+}
+.meth-flow-label {
+  font-size: 0.85rem;
+  color: var(--muted, #888);
+  margin-bottom: 0.5vh;
+}
+.meth-flow-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.meth-arrow {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent, #d81e06);
+}
+.meth-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1.1rem;
+}
+.meth-table th, .meth-table td {
+  padding: 1.5vh 1.5vw;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+.meth-table th {
+  background: var(--ink, #111);
+  color: var(--white, #fff);
+  font-weight: 700;
+}
+.meth-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2vw;
+}
+.meth-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2vw;
+}
+.meth-center {
+  justify-content: center;
+}
+.meth-center-content {
+  text-align: center;
+  align-items: center;
+}
+.meth-big {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.meth-muted {
+  color: var(--muted, #666);
+}
+.meth-check {
+  color: var(--accent, #d81e06);
+  font-weight: 900;
+  margin-right: 0.5em;
+}
+.meth-cross {
+  color: #999;
+  font-weight: 900;
+  margin-right: 0.5em;
+}
+.meth-footer-line {
+  margin-top: auto;
+  padding-top: 2vh;
+  border-top: 1px solid #ddd;
+  font-size: 1rem;
+  color: var(--muted, #888);
+}
+@media (max-width: 900px) {
+  .meth-row, .meth-grid-2, .meth-grid-3 { flex-direction: column; display: block; }
+  .meth-title { font-size: 2rem; }
+}
+</style>
+
+<!-- METHODOLOGY_SLIDE: 亿科投流方法论 · 定向框架 -->
+<section class="slide methodology-slide">
+  <div class="meth-header">
+    <span class="meth-tag">Methodology</span>
+    <span class="meth-number">M01</span>
+  </div>
+  <div class="meth-body meth-center">
+    <div style="margin-bottom: 3vh;">
+      <div style="font-size: 1.1rem; font-weight: 700; color: var(--accent,#d81e06); margin-bottom: 1vh;">投流中台 · 投手 × 策划 · 思想统一</div>
+      <h1 class="meth-title" style="font-size: 4rem;">亿科投流方法论 · 定向框架</h1>
+      <div class="meth-subtitle">一张骨架</div>
+    </div>
+    <p class="meth-big" style="max-width: 80%;">投放的原子单位不是「人群」，是「语境」——角度 × 人群的匹配对</p>
+    <div class="meth-footer-line" style="margin-top: 4vh;">
+      语境 = 角度 × 人群 · 结构刚性 · 参数弹性 · 先验押注 · 嵌套去跑
+    </div>
+  </div>
+</section>
+
+<!-- METHODOLOGY_SLIDE: 为什么要统一 · The Gap -->
+<section class="slide methodology-slide">
+  <div class="meth-header">
+    <span class="meth-tag">Methodology</span>
+    <span class="meth-number">M02</span>
+  </div>
+  <h1 class="meth-title">为什么要统一 · The Gap</h1>
+  <div class="meth-body">
+    <p class="meth-big">策划想「内容」，投手想「定向」——两张皮</p>
+    <p class="meth-p">素材在讲一套故事，定向在框另一群人，中间没人对账。</p>
+    <div class="meth-row">
+      <div class="meth-col meth-box">
+        <div class="meth-box-title">策划视角</div>
+        <ul class="meth-box-list">
+          <li>讲什么故事、什么角度</li>
+          <li>内容 / 素材 / 卖点</li>
+          <li>想的是「打动谁的心」</li>
+        </ul>
+      </div>
+      <div class="meth-col meth-box">
+        <div class="meth-box-title">投手视角</div>
+        <ul class="meth-box-list">
+          <li>框哪群人、怎么出价</li>
+          <li>人群包 / 定向 / 出价</li>
+          <li>想的是「投得中谁」</li>
+        </ul>
+      </div>
+    </div>
+    <div class="meth-darkbox">
+      <strong>结果：</strong>素材讲一套、定向框另一套，素材和人对不上，预算在两套逻辑之间空转。
+    </div>
+  </div>
+</section>
+
+<!-- METHODOLOGY_SLIDE: 全景 · One Spine -->
+<section class="slide methodology-slide">
+  <div class="meth-header">
+    <span class="meth-tag">Methodology</span>
+    <span class="meth-number">M03</span>
+  </div>
+  <h1 class="meth-title">全景 · One Spine</h1>
+  <div class="meth-subtitle">从预算到轮换，一条推导链</div>
+  <div class="meth-body meth-center">
+    <p class="meth-p" style="text-align: center;">预算怎么一步步变成「在什么语境里，投给谁」——记住这条脊</p>
+    <div class="meth-flow" style="margin-top: 2vh;">
+      <div class="meth-flow-item">
+        <div class="meth-flow-label">ad budget</div>
+        <div class="meth-flow-value">投多少</div>
+      </div>
+      <div class="meth-arrow">→</div>
+      <div class="meth-flow-item">
+        <div class="meth-flow-label">Product</div>
+        <div class="meth-flow-value">推哪个</div>
+      </div>
+      <div class="meth-arrow">→</div>
+      <div class="meth-flow-item">
+        <div class="meth-flow-label">TA</div>
+        <div class="meth-flow-value">谁会买</div>
+      </div>
+      <div class="meth-arrow">→</div>
+      <div class="meth-flow-item">
+        <div class="meth-flow-label">segments</div>
+        <div class="meth-flow-value">切人群段</div>
+      </div>
+      <div class="meth-arrow">→</div>
+      <div class="meth-flow-item">
+        <div class="meth-flow-label">context</div>
+        <div class="meth-flow-value">角度×人群</div>
+      </div>
+      <div class="meth-arrow">→</div>
+      <div class="meth-flow-item">
+        <div class="meth-flow-label">targeting sets</div>
+        <div class="meth-flow-value">定向组合</div>
+      </div>
+      <div class="meth-arrow">→</div>
+      <div class="meth-flow-item">
+        <div class="meth-flow-label">rotation</div>
+        <div class="meth-flow-value">轮换测试</div>
+      </div>
+    </div>
+    <div class="meth-row" style="margin-top: 3vh;">
+      <div class="meth-col meth-darkbox" style="text-align:center;"><strong>策划区</strong><br>context = 角度 × 人群</div>
+      <div class="meth-col meth-darkbox" style="text-align:center;"><strong>投手区</strong><br>targeting sets</div>
+    </div>
+    <p class="meth-p" style="text-align: center; margin-top: 2vh;">后面每一页，都是把这条脊上的某一段放大——尤其是 <strong>角度×人群</strong> 和 <strong>定向组合</strong> 这两段。</p>
+  </div>
+</section>
+
+<!-- METHODOLOGY_SLIDE: 推导·上游 · Budget → People -->
+<section class="slide methodology-slide">
+  <div class="meth-header">
+    <span class="meth-tag">Methodology</span>
+    <span class="meth-number">M04</span>
+  </div>
+  <h1 class="meth-title">推导·上游 · Budget → People</h1>
+  <div class="meth-subtitle">预算的第一约束是「产品」，不是「人群」</div>
+  <div class="meth-body">
+    <p class="meth-p">钱先落到推哪个产品，产品才定谁会买，TA 再切成一个个人群段。</p>
+    <div class="meth-grid-2">
+      <div class="meth-box">
+        <div class="meth-box-title">1. 钱从哪来、投多少</div>
+        <div class="meth-box-text">一切的起点</div>
+      </div>
+      <div class="meth-box">
+        <div class="meth-box-title">2. 推哪个产品</div>
+        <div class="meth-box-text">预算的第一个约束</div>
+      </div>
+      <div class="meth-box">
+        <div class="meth-box-title">3. 谁会买这个产品</div>
+        <div class="meth-box-text">产品决定受众</div>
+      </div>
+      <div class="meth-box">
+        <div class="meth-box-title">4. 把 TA 切成一个个人群段</div>
+        <div class="meth-box-text">可操作的「谁」</div>
+      </div>
+    </div>
+    <div class="meth-footer-line">
+      到这里只解决了「谁」——还差最关键的一跳：把「谁」和「角度」配成语境。
+    </div>
+  </div>
+</section>
+
+<!-- METHODOLOGY_SLIDE: 关键一跳 · The Pairing -->
+<section class="slide methodology-slide">
+  <div class="meth-header">
+    <span class="meth-tag">Methodology</span>
+    <span class="meth-number">M05</span>
+  </div>
+  <h1 class="meth-title">关键一跳 · The Pairing</h1>
+  <div class="meth-subtitle">context = 角度 × 人群，成对绑定</div>
+  <div class="meth-body">
+    <p class="meth-p">投放的原子单位是语境——同一张床单，卖美学就讲设计，卖舒适就讲材质。</p>
+    <table class="meth-table" style="max-width: 800px;">
+      <thead>
+        <tr><th>角度＼人群</th><th>美学人群</th><th>舒适人群</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>讲设计（角度）</strong></td><td><span class="meth-check">✓</span>对味</td><td><span class="meth-cross">✕</span>错配</td></tr>
+        <tr><td><strong>讲材质（角度）</strong></td><td><span class="meth-cross">✕</span>错配</td><td><span class="meth-check">✓</span>对味</td></tr>
+      </tbody>
+    </table>
+    <div class="meth-darkbox">
+      <span class="meth-cross">×</span> 不是笛卡尔积（全排列），是 <strong>配对</strong> ——只有对角线成立。策划管的就是这一层：给对的人，配对的角度。
+    </div>
+  </div>
+</section>
+
+<!-- METHODOLOGY_SLIDE: 推导·下游 · Refine -->
+<section class="slide methodology-slide">
+  <div class="meth-header">
+    <span class="meth-tag">Methodology</span>
+    <span class="meth-number">M06</span>
+  </div>
+  <h1 class="meth-title">推导·下游 · Refine</h1>
+  <div class="meth-subtitle">在一个语境里，把人群再细分成定向组合</div>
+  <div class="meth-body">
+    <p class="meth-p">需求 × 消费 × 决策…… 组合出一批 targeting sets——这是投手在框里摆的棋。</p>
+    <div class="meth-row">
+      <div class="meth-col meth-box">
+        <div class="meth-box-title">一个语境</div>
+        <div class="meth-box-text">context = 讲设计 × 美学人群</div>
+      </div>
+      <div class="meth-col">
+        <div class="meth-box" style="margin-bottom: 1.5vh;">
+          <div class="meth-box-text">需求 A1 × 消费 B1 × 决策 C1</div>
+        </div>
+        <div class="meth-box" style="margin-bottom: 1.5vh;">
+          <div class="meth-box-text">A1 × B2 × C2</div>
+        </div>
+        <div class="meth-box" style="margin-bottom: 1.5vh;">
+          <div class="meth-box-text">A2 × B1 × C2</div>
+        </div>
+        <div class="meth-box" style="margin-bottom: 1.5vh;">
+          <div class="meth-box-text">A2 × B3 × C1</div>
+        </div>
+        <div class="meth-box">
+          <div class="meth-box-text">A3 × B2 × C2 … 共 N 个组合</div>
+        </div>
+      </div>
+    </div>
+    <div class="meth-footer-line">
+      <strong>context 是策划画的框，targeting sets 是投手在框里摆的棋</strong> ——维度不是固定的，下一页讲弹性。
+    </div>
+  </div>
+</section>
+
+<!-- METHODOLOGY_SLIDE: 核心动作 · Prior not Posterior -->
+<section class="slide methodology-slide">
+  <div class="meth-header">
+    <span class="meth-tag">Methodology</span>
+    <span class="meth-number">M07</span>
+  </div>
+  <h1 class="meth-title">核心动作 · Prior not Posterior</h1>
+  <div class="meth-subtitle">先验预判，不是后验筛选</div>
+  <div class="meth-body">
+    <p class="meth-p">一分钱没花、没有数据，靠逻辑先押可能赢的几个，放进语境去 run。</p>
+    <div class="meth-row">
+      <div class="meth-col meth-box">
+        <div class="meth-box-title"><span class="meth-check">✓</span> 这才是 match</div>
+        <ul class="meth-box-list">
+          <li>花钱前，靠判断给组合排序</li>
+          <li>从 N 个里押最可能赢的几个</li>
+          <li>放进语境去 run</li>
+        </ul>
+      </div>
+      <div class="meth-col meth-box">
+        <div class="meth-box-title"><span class="meth-cross">✕</span> 这不是 match</div>
+        <ul class="meth-box-list">
+          <li>后验筛选</li>
+          <li>花完钱，看数据删掉差的</li>
+          <li>先撒 27 个，再事后砍——这是交学费，不是判断</li>
+        </ul>
+      </div>
+    </div>
+    <div class="meth-darkbox">
+      先押、后验证，不是先撒、后删——省下的就是那笔学费。
+    </div>
+  </div>
+</section>
+
+<!-- METHODOLOGY_SLIDE: 框架内核 · Rigid & Elastic -->
+<section class="slide methodology-slide">
+  <div class="meth-header">
+    <span class="meth-tag">Methodology</span>
+    <span class="meth-number">M08</span>
+  </div>
+  <h1 class="meth-title">框架内核 · Rigid & Elastic</h1>
+  <div class="meth-subtitle">结构刚性，参数弹性</div>
+  <div class="meth-body">
+    <p class="meth-p">嵌套逻辑恒定不变；用几维、下探多深、押几个，都随实战条件现场调档。</p>
+    <div class="meth-darkbox" style="margin-bottom: 2vh;">
+      <strong>不变式：</strong>targeting sets ⊂ context —— 恒定不变，不商量
+    </div>
+    <div class="meth-grid-3">
+      <div class="meth-box">
+        <div class="meth-box-title">旋钮 1 · 定向维度</div>
+        <div class="meth-box-text">3 维（需求×消费×决策） → 2 维 → 1 维<br>由预算 / 数据 / 品类决定</div>
+      </div>
+      <div class="meth-box">
+        <div class="meth-box-title">旋钮 2 · 语境深度</div>
+        <div class="meth-box-text">context → 要不要下探 sub context<br>由预算量级 / 周期长短决定</div>
+      </div>
+      <div class="meth-box">
+        <div class="meth-box-title">旋钮 3 · 押几个</div>
+        <div class="meth-box-text">27 选 3 / 9 选 X / 3 选 1<br>组合随维度缩放，押的动作不变</div>
+      </div>
+    </div>
+    <div class="meth-footer-line">
+      维度可以坍缩，嵌套不能坍缩。换个预算，27 选 3 就成 3 选 1，但它仍是同一个框架。
+    </div>
+  </div>
+</section>
+
+<!-- METHODOLOGY_SLIDE: 落点 · Two Roles, One Move -->
+<section class="slide methodology-slide">
+  <div class="meth-header">
+    <span class="meth-tag">Methodology</span>
+    <span class="meth-number">M09</span>
+  </div>
+  <h1 class="meth-title">落点 · Two Roles, One Move</h1>
+  <div class="meth-subtitle">策划管 context，投手管 targeting sets——一件事的两段</div>
+  <div class="meth-body meth-center">
+    <p class="meth-p" style="text-align: center;">不是两张皮，是嵌套：投手的棋，摆在策划画的框里。</p>
+    <div style="display: flex; align-items: center; justify-content: center; gap: 2vw; font-size: 1.4rem; font-weight: 700; margin: 3vh 0;">
+      <div class="meth-box" style="text-align:center; flex:1;">角度</div>
+      <div class="meth-arrow">→</div>
+      <div class="meth-box" style="text-align:center; flex:1;">人群</div>
+      <div class="meth-arrow">→</div>
+      <div class="meth-box" style="text-align:center; flex:1;">定向</div>
+      <div class="meth-arrow">→</div>
+      <div class="meth-box" style="text-align:center; flex:1;">run</div>
+    </div>
+    <div class="meth-darkbox" style="text-align: center;">
+      对齐的那条线：角度 → 人群 → 定向 → run，一条到底，谁都不掉链子
+    </div>
+  </div>
+</section>
+
+<!-- METHODOLOGY_SLIDE: 一页带走 · The Whole Framework -->
+<section class="slide methodology-slide">
+  <div class="meth-header">
+    <span class="meth-tag">Methodology</span>
+    <span class="meth-number">M10</span>
+  </div>
+  <h1 class="meth-title">一页带走 · The Whole Framework</h1>
+  <div class="meth-subtitle">定向框架 · 一张骨架带走</div>
+  <div class="meth-body">
+    <div style="text-align: center; font-size: 1.3rem; margin-bottom: 3vh;">
+      <div>推导脊柱</div>
+      <div style="font-size: 2rem; color: var(--accent,#d81e06);">↓</div>
+      <div><strong>context = 角度 × 人群</strong></div>
+      <div style="font-size: 2rem; color: var(--accent,#d81e06);">↓</div>
+      <div>run → rotation</div>
+    </div>
+    <table class="meth-table">
+      <thead>
+        <tr><th>模块</th><th>要点</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>不变式</strong></td><td>targeting sets ⊂ context</td></tr>
+        <tr><td><strong>三个旋钮 · 参数弹性</strong></td><td>定向维度 3→2→1 维；语境深度 context→sub；押几个 N 选 3</td></tr>
+        <tr><td><strong>两个角色</strong></td><td>策划画框 context；投手框里摆 targeting sets</td></tr>
+      </tbody>
+    </table>
+    <div class="meth-footer-line" style="text-align: center; font-weight: 700;">
+      语境 = 角度 × 人群；先验押注，嵌套去跑；结构不变，维度可调。
+    </div>
+  </div>
+</section>

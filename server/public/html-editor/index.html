@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Always fetch a fresh HTML shell so updates show up without a hard refresh. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>HTML Editor · Collaborative revision for HTML</title>
+<link rel="icon" type="image/svg+xml" href="./assets/logo-mark.svg">
+<link rel="stylesheet" href="./styles/design.css">
+<style>
+  /* Wheat-toned dot grid on the root so it fills the whole scroll height
+     (no seam when the page is taller than one viewport). */
+  /* Live-tweakable knobs (driven by the ?tweak panel; safe defaults here). */
+  :root {
+    --page-bg: hsl(220 8% 98%);
+    --dot-alpha: 0.15;
+    --card-alpha: 0.83;
+  }
+  html {
+    background-color: var(--page-bg);
+    background-image: radial-gradient(circle at 1px 1px, rgba(60, 64, 74, var(--dot-alpha)) 1px, transparent 0);
+    background-size: 22px 22px;
+    background-position: -1px -1px;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background: transparent;
+  }
+
+  /* ── Top bar ─────────────────────────────────── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    height: 56px;
+    margin-top: 18px;
+    padding: 0 32px;
+    background: transparent;
+  }
+  .topbar .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-family: var(--font-sans);
+    font-size: var(--text-md);
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    color: var(--ink);
+  }
+  .topbar .brand .brand-mark {
+    height: 24px;
+    width: auto;
+    display: block;
+  }
+  .topbar .right { margin-left: auto; display: flex; gap: 14px; align-items: center; }
+  .topbar .right .small {
+    font-size: var(--text-sm);
+    color: var(--muted);
+  }
+  .lang-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: none;
+    padding: 4px 2px;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: var(--text-sm);
+    line-height: 1;
+    transition: color 100ms;
+  }
+  .lang-toggle:hover { color: var(--ink); }
+  .lang-toggle .globe { width: 17px; height: 17px; display: block; }
+  .lang-toggle .lang-label { font-weight: 500; }
+  .beta-pill {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 2px 7px;
+    background: #fef3c7;
+    color: #92400e;
+    border-radius: 999px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .beta-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin-bottom: 18px;
+    font-size: 12px;
+    color: #78350f;
+    line-height: 1.5;
+  }
+  .beta-banner .b-icon { flex-shrink: 0; }
+  .beta-banner a { color: #78350f; text-decoration: underline; }
+
+  /* ── Stage (centered card) ───────────────────── */
+  .stage {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px 64px;
+  }
+  .card {
+    width: 100%;
+    max-width: 760px;
+    /* Translucent white so the cool dot grid faintly shows through. */
+    background: rgba(255, 255, 255, var(--card-alpha));
+    -webkit-backdrop-filter: blur(3px) saturate(1.04);
+    backdrop-filter: blur(3px) saturate(1.04);
+    border: var(--rule-w) solid rgba(255, 255, 255, 0.7);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(20, 24, 34, 0.04), 0 10px 30px rgba(20, 24, 34, 0.08);
+    padding: 48px 48px 40px;
+  }
+  @media (max-width: 600px) {
+    .card { padding: 32px 24px 28px; }
+  }
+
+  /* Hero brand lockup */
+  .hero-logo {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 26px;
+  }
+  .hero-logo img {
+    height: 54px;
+    width: auto;
+    display: block;
+    flex-shrink: 0;
+  }
+  .hero-logo .wordmark {
+    font-family: var(--font-sans);
+    font-weight: 800;
+    font-size: 32px;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .hero-logo .wordmark .ed { color: var(--signal); }
+  @media (max-width: 480px) {
+    .hero-logo img { height: 46px; }
+    .hero-logo .wordmark { font-size: 26px; }
+  }
+
+  .eyebrow {
+    display: inline-block;
+    font-size: var(--text-xs);
+    color: var(--signal-ink);
+    background: var(--signal-soft);
+    padding: 4px 10px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    margin-bottom: 20px;
+  }
+  .card h1 {
+    font-size: var(--text-display);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin-bottom: 14px;
+  }
+  .card .lead {
+    font-size: var(--text-md);
+    color: var(--muted);
+    line-height: 1.6;
+    max-width: 560px;
+    margin-bottom: 32px;
+  }
+  .card .lead strong { color: var(--ink); font-weight: 600; }
+
+  /* ── Chinese typography ─────────────────────────
+     The display sizes / negative tracking are tuned for Latin; CJK wants no
+     negative letter-spacing, a touch more leading, and keep-all line breaks
+     so words/punctuation don't split awkwardly. */
+  html[lang="zh-CN"] .card h1 {
+    font-size: 40px;
+    line-height: 1.22;
+    letter-spacing: 0;
+    word-break: keep-all;
+  }
+  html[lang="zh-CN"] .card .lead {
+    line-height: 1.75;
+    letter-spacing: 0.01em;
+  }
+  html[lang="zh-CN"] .eyebrow { letter-spacing: 0.02em; }
+  html[lang="zh-CN"] .step .d,
+  html[lang="zh-CN"] .drop .txt .small { line-height: 1.65; }
+  html[lang="zh-CN"] .step .d { word-break: keep-all; }
+  @media (max-width: 480px) {
+    html[lang="zh-CN"] .card h1 { font-size: 34px; }
+  }
+
+  /* ── Steps ─────────────────────────────────── */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  @media (max-width: 720px) {
+    .steps { grid-template-columns: repeat(2, 1fr); }
+  }
+  .step {
+    background: var(--panel-2);
+    border-radius: var(--radius-sm);
+    padding: 16px 14px 18px;
+  }
+  .step .icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    background: var(--panel);
+    border: var(--rule-w) solid var(--rule);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-soft);
+    margin-bottom: 12px;
+  }
+  .step .icon svg {
+    width: 18px;
+    height: 18px;
+  }
+  .step .t {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .step .d {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  /* ── Drop + actions (side-by-side) ─────────── */
+  .upload-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: stretch;
+  }
+  @media (max-width: 560px) {
+    .upload-row { grid-template-columns: 1fr; }
+  }
+  .drop {
+    position: relative;
+    border: 1.5px dashed var(--rule-strong);
+    background: var(--panel-2);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    cursor: pointer;
+    transition: background 100ms, border-color 100ms;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .drop:hover { background: var(--signal-soft); border-color: var(--signal); }
+  .drop.dragover { background: var(--signal-soft); border-color: var(--signal); }
+  .drop .icon {
+    width: 36px; height: 36px;
+    border-radius: var(--radius-sm);
+    background: var(--panel);
+    border: var(--rule-w) solid var(--rule-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .drop .txt .big {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .drop .txt .small {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .start-col {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .start-col .btn { width: 100%; justify-content: center; }
+  /* Click-to-choose menu inside the drop zone (file OR folder). */
+  .upload-menu {
+    position: absolute;
+    left: 16px;
+    top: calc(100% - 6px);
+    z-index: 50;
+    min-width: 250px;
+    background: var(--panel);
+    border: var(--rule-w) solid var(--rule-strong);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 12px 30px rgba(0,0,0,.14);
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .upload-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: none;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .upload-menu button:hover { background: var(--panel-2); }
+  .upload-menu .um-ic { font-size: 15px; line-height: 1; }
+
+  /* ── Recent files ──────────────────────────── */
+  .recent {
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: var(--rule-w) solid var(--rule);
+  }
+  .recent .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .recent .head h3 {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .recent .head .clear {
+    background: transparent;
+    border: none;
+    color: var(--subtle);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+  .recent .head .clear:hover { color: var(--error); background: var(--panel-2); }
+  .recent ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 6px;
+  }
+  .recent li a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--panel-2);
+    border: var(--rule-w) solid transparent;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: var(--ink);
+    transition: background 80ms, border-color 80ms;
+  }
+  .recent li a:hover {
+    background: var(--panel);
+    border-color: var(--rule-strong);
+  }
+  .recent li .ic {
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    background: var(--panel);
+    border: var(--rule-w) solid var(--rule-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .recent li .name {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+  .recent li .ago {
+    font-size: 11px;
+    color: var(--subtle);
+    flex-shrink: 0;
+  }
+  .recent li .del {
+    background: transparent;
+    border: none;
+    color: var(--subtle);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 80ms;
+  }
+  .recent li:hover .del { opacity: 1; }
+  .recent li .del:hover { color: var(--error); background: var(--panel-2); }
+
+  /* ── Footer ─────────────────────────────────── */
+  .footer {
+    text-align: center;
+    padding: 16px 24px 28px;
+    font-size: 12px;
+    color: var(--subtle);
+  }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="brand"><img class="brand-mark" src="./assets/logo-mark.svg" alt="">HTML Editor<span class="beta-pill">BETA</span></div>
+  <div class="right">
+    <button class="lang-toggle" id="lang-toggle" type="button" title="切换语言 / Switch language" aria-label="Switch language">
+      <svg class="globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"/>
+        <path d="M3 12h18"/>
+        <path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/>
+      </svg>
+      <span class="lang-label">中文</span>
+    </button>
+    <a class="small" href="https://github.com/yuzycheng/HTML-Editor" target="_blank" rel="noopener" style="color:var(--muted); text-decoration:none;">GitHub ↗</a>
+  </div>
+</div>
+
+<!-- Stage -->
+<section class="stage">
+  <div class="card">
+    <div class="hero-logo">
+      <img src="./assets/logo-mark.svg" alt="HTML Editor logo">
+      <span class="wordmark">HTML<span class="ed"> EDITOR</span></span>
+    </div>
+    <div class="eyebrow" data-i18n="eyebrow">For revising HTML</div>
+    <h1 data-i18n="h1">Edit and comment on<br>HTML — together.</h1>
+    <p class="lead" data-i18n="lead">
+      Drop in an HTML file, share the link, edit with your team — then
+      download the result or send it back to your AI.
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v12"/>
+            <path d="M7 8l5-5 5 5"/>
+            <path d="M5 16v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/>
+          </svg>
+        </div>
+        <div class="t" data-i18n="up_t">Upload</div>
+        <div class="d" data-i18n="up_d">Drop your .html file.</div>
+      </div>
+      <div class="step">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="18" cy="5" r="2.5"/>
+            <circle cx="6" cy="12" r="2.5"/>
+            <circle cx="18" cy="19" r="2.5"/>
+            <path d="M8.5 13.3l7 4.4"/>
+            <path d="M15.5 6.3l-7 4.4"/>
+          </svg>
+        </div>
+        <div class="t" data-i18n="sh_t">Share</div>
+        <div class="d" data-i18n="sh_d">Send the link — no signup.</div>
+      </div>
+      <div class="step">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+          </svg>
+        </div>
+        <div class="t" data-i18n="ec_t">Edit &amp; comment</div>
+        <div class="d" data-i18n="ec_d">Rewrite text, leave notes.</div>
+      </div>
+      <div class="step">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <path d="M7 10l5 5 5-5"/>
+            <path d="M12 15V3"/>
+          </svg>
+        </div>
+        <div class="t" data-i18n="ex_t">Export</div>
+        <div class="d" data-i18n="ex_d">Download HTML or hand off to AI.</div>
+      </div>
+    </div>
+
+    <div class="upload-row">
+      <div class="drop" id="drop-zone" role="button" tabindex="0">
+        <div class="icon">↑</div>
+        <div class="txt">
+          <div class="big" data-i18n="drop_big">Drop an HTML file or a whole folder here</div>
+          <div class="small" data-i18n="drop_small">Or click to choose — an HTML file, or a folder with images/videos</div>
+        </div>
+        <input type="file" id="file-input" accept=".html,.htm" multiple style="display:none">
+        <input type="file" id="folder-input" webkitdirectory multiple style="display:none">
+        <div class="upload-menu" id="upload-menu" role="menu" style="display:none">
+          <button type="button" data-pick="file" role="menuitem"><span class="um-ic">📄</span><span data-i18n="pick_file">HTML file</span></button>
+          <button type="button" data-pick="folder" role="menuitem"><span class="um-ic">📁</span><span data-i18n="pick_folder">Folder (with images/videos)</span></button>
+        </div>
+      </div>
+      <div class="start-col">
+        <button class="btn btn-primary btn-lg" id="start-btn" data-i18n="start">Start →</button>
+      </div>
+    </div>
+
+    <div class="recent" id="recent" style="display:none;">
+      <div class="head">
+        <h3 data-i18n="recent_h">Recent files</h3>
+        <button class="clear" id="recent-clear" data-i18n="clear">Clear all</button>
+      </div>
+      <ul id="recent-list"></ul>
+    </div>
+  </div>
+</section>
+
+<div class="footer" data-i18n="footer">A small tool for editing HTML, together.</div>
+
+<!-- ───────── Language toggle (EN ⇄ 中文) ───────── -->
+<script>
+(function () {
+  const I18N = {
+    eyebrow:    { en: 'For revising HTML', zh: '用于修订 HTML' },
+    h1:         { en: 'Edit and comment on<br>HTML — together.', zh: '一起编辑、批注<br>你的 HTML。' },
+    lead:       { en: 'Drop in an HTML file, share the link, edit with your team — then download the result or send it back to your AI.',
+                  zh: '拖入你的 HTML，自由编辑文字、为任意元素留下评论，分享链接和团队一起改；完成后可直接下载成品，也能作为 Prompt 交回 AI 继续优化。' },
+    up_t:       { en: 'Upload', zh: '上传' },
+    up_d:       { en: 'Drop your .html file.', zh: '拖入你的 .html 文件。' },
+    sh_t:       { en: 'Share', zh: '分享' },
+    sh_d:       { en: 'Send the link — no signup.', zh: '发送链接，无需注册。' },
+    ec_t:       { en: 'Edit & comment', zh: '编辑与批注' },
+    ec_d:       { en: 'Rewrite text, comment on any element.', zh: '改写文字，为任意元素留批注。' },
+    ex_t:       { en: 'Export', zh: '导出' },
+    ex_d:       { en: 'Download HTML or package it for AI.', zh: '下载 HTML<br>或打包给 AI 优化。' },
+    drop_big:   { en: 'Drop an HTML file or a whole folder here', zh: '把 HTML 文件或整个文件夹拖到这里' },
+    drop_small: { en: 'Or click to choose — an HTML file, or a folder with images/videos', zh: '或点此选择 · HTML 文件，或含图片 / 视频的文件夹' },
+    pick_file:  { en: 'HTML file', zh: 'HTML 文件' },
+    pick_folder:{ en: 'Folder (with images/videos)', zh: '文件夹（含图片 / 视频）' },
+    start:      { en: 'Start →', zh: '开始 →' },
+    recent_h:   { en: 'Recent files', zh: '最近文件' },
+    clear:      { en: 'Clear all', zh: '全部清除' },
+    footer:     { en: 'A small tool for editing HTML, together.', zh: '一个一起编辑 HTML 的小工具。' },
+    title:      { en: 'HTML Editor · Collaborative revision for HTML', zh: 'HTML 编辑器 · 协作修订 HTML' },
+  };
+
+  let curLang = localStorage.getItem('hce-lang')
+    || ((navigator.language || '').toLowerCase().startsWith('zh') ? 'zh' : 'en');
+
+  function applyLang(lang) {
+    curLang = (lang === 'zh') ? 'zh' : 'en';
+    document.documentElement.lang = curLang === 'zh' ? 'zh-CN' : 'en';
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const t = I18N[el.getAttribute('data-i18n')];
+      if (t && t[curLang] != null) el.innerHTML = t[curLang];
+    });
+    document.title = I18N.title[curLang];
+    // The label shows the CURRENT language.
+    const lbl = document.querySelector('#lang-toggle .lang-label');
+    if (lbl) lbl.textContent = curLang === 'zh' ? 'CN' : 'EN';
+    try { localStorage.setItem('hce-lang', curLang); } catch (e) {}
+  }
+
+  document.getElementById('lang-toggle').addEventListener('click', () => {
+    applyLang(curLang === 'zh' ? 'en' : 'zh');
+  });
+  applyLang(curLang);
+})();
+</script>
+
+<script>
+  const startBtn = document.getElementById('start-btn');
+  const drop = document.getElementById('drop-zone');
+  const input = document.getElementById('file-input');
+
+  // A single upload entry. Because one <input> can't offer BOTH a file picker
+  // and a folder picker, clicking the box (or Start) opens a tiny menu to pick
+  // "HTML file" or "Folder". DRAG-AND-DROP needs no menu — it auto-detects a
+  // file vs a folder (collectDropFiles walks dropped directories).
+  const folderInput = document.getElementById('folder-input');
+  const uploadMenu = document.getElementById('upload-menu');
+
+  function openUploadMenu() {
+    uploadMenu.style.display = 'flex';
+    document.removeEventListener('click', onOutsideMenu, true);
+    setTimeout(() => document.addEventListener('click', onOutsideMenu, true), 0);
+  }
+  function closeUploadMenu() {
+    uploadMenu.style.display = 'none';
+    document.removeEventListener('click', onOutsideMenu, true);
+  }
+  function onOutsideMenu(e) {
+    if (e.target.closest('#upload-menu') || e.target.closest('#drop-zone') || e.target.closest('#start-btn')) return;
+    closeUploadMenu();
+  }
+
+  startBtn.addEventListener('click', (e) => { e.preventDefault(); openUploadMenu(); });
+  drop.addEventListener('click', (e) => {
+    if (e.target.closest('#upload-menu')) return;   // menu buttons handle themselves
+    if (e.target.tagName === 'INPUT') return;       // ignore a programmatic input.click() bubbling back
+    openUploadMenu();
+  });
+  uploadMenu.querySelector('[data-pick="file"]').addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation(); closeUploadMenu(); input.click();
+  });
+  uploadMenu.querySelector('[data-pick="folder"]').addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation(); closeUploadMenu(); folderInput.click();
+  });
+  folderInput.addEventListener('change', e => { handleFiles(e.target.files); });
+
+  input.addEventListener('change', e => {
+    handleFiles(e.target.files);
+  });
+
+  // ── Drag-and-drop: ONE unified handler at the window level ────────────
+  // A single HTML file OR a whole folder can be dropped ANYWHERE on the page,
+  // and it auto-detects which. We intercept dragover/drop at the WINDOW and
+  // always preventDefault, so the browser never runs its own "open the dropped
+  // file" action (that stray default was the layout "错乱").
+  //
+  // REAL-CHROME CORRECTNESS: a DataTransfer is only valid DURING the drop
+  // event. `webkitGetAsEntry()` and `.files` MUST be read synchronously here —
+  // if we passed the event into an async function and read them later, Chrome
+  // has already emptied the DataTransfer and the folder walk silently yields
+  // nothing (→ "dropping a folder does nothing / breaks", while the file-input
+  // path still works). So we snapshot entries + files up front, THEN go async.
+  let dropBusy = false;
+  window.addEventListener('dragover', e => { e.preventDefault(); }, false);
+  window.addEventListener('dragenter', e => { e.preventDefault(); drop.classList.add('dragover'); }, false);
+  window.addEventListener('dragleave', e => {
+    if (e.target === document.documentElement || e.target === document.body) drop.classList.remove('dragover');
+  }, false);
+  window.addEventListener('drop', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    drop.classList.remove('dragover');
+    if (dropBusy) return;
+    dropBusy = true;
+    const done = () => { dropBusy = false; };
+    try {
+      const dt = e.dataTransfer;
+      // Snapshot SYNCHRONOUSLY — after this tick the DataTransfer is dead.
+      const plainFiles = Array.from((dt && dt.files) || []);
+      const items = (dt && dt.items) ? Array.from(dt.items) : [];
+      const entries = [];
+      let hasDirectory = false;
+      for (let i = 0; i < items.length; i++) {
+        const getEntry = items[i] && items[i].webkitGetAsEntry;
+        const en = (typeof getEntry === 'function') ? items[i].webkitGetAsEntry() : null;
+        if (en) { entries.push(en); if (en.isDirectory) hasDirectory = true; }
+      }
+      // FOLDER path: at least one dropped item is a directory → walk it (this is
+      // the SAME result as the "choose a folder" button, just from a drop).
+      // FILE path: no directories → use the plain file list directly.
+      if (hasDirectory && entries.length) {
+        Promise.all(entries.map(en => walkEntry(en, '')))
+          .then(a => a.flat())
+          .then(files => handleFiles(files.length ? files : plainFiles))
+          .catch(() => handleFiles(plainFiles))
+          .finally(done);
+      } else {
+        Promise.resolve(handleFiles(plainFiles)).catch(() => {}).finally(done);
+      }
+    } catch (_) {
+      done();
+    }
+  }, false);
+
+  // A short localized message (upload flow runs outside the language IIFE).
+  function msg(key) {
+    const lang = (localStorage.getItem('hce-lang')
+      || ((navigator.language || '').toLowerCase().startsWith('zh') ? 'zh' : 'en')) === 'zh' ? 'zh' : 'en';
+    const M = {
+      need_html:  { en: 'Please include an .html or .htm file.', zh: '请包含一个 .html 或 .htm 文件。' },
+      too_big:    { en: 'HTML file too large. Max 5 MB.', zh: 'HTML 文件过大，最大 5 MB。' },
+      open_fail:  { en: 'Could not open the file:', zh: '无法打开文件：' },
+    };
+    return (M[key] && M[key][lang]) || (M[key] && M[key].en) || key;
+  }
+
+  // ── Gather dropped files, walking folders too ──────────────────────────
+  // A plain multi-file drop populates dataTransfer.files. Dropping a FOLDER
+  // doesn't — we must walk the directory entries. Each file is stamped with a
+  // relative path so nested assets (images/cat.png) can be matched to the src.
+  function collectDropFiles(e) {
+    const dt = e.dataTransfer;
+    const items = dt && dt.items;
+    if (!items || !items.length || typeof items[0].webkitGetAsEntry !== 'function') {
+      return Promise.resolve(Array.from((dt && dt.files) || []));
+    }
+    const entries = [];
+    for (let i = 0; i < items.length; i++) {
+      const en = items[i].webkitGetAsEntry && items[i].webkitGetAsEntry();
+      if (en) entries.push(en);
+    }
+    if (!entries.length) return Promise.resolve(Array.from((dt && dt.files) || []));
+    return Promise.all(entries.map(en => walkEntry(en, ''))).then(a => a.flat());
+  }
+  function walkEntry(entry, prefix) {
+    return new Promise(resolve => {
+      if (entry.isFile) {
+        entry.file(f => {
+          try { f._relPath = prefix + entry.name; } catch (_) {}
+          resolve([f]);
+        }, () => resolve([]));
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        const acc = [];
+        const readBatch = () => reader.readEntries(batch => {
+          if (!batch.length) {
+            Promise.all(acc.map(en => walkEntry(en, prefix + entry.name + '/'))).then(a => resolve(a.flat()));
+          } else {
+            for (let i = 0; i < batch.length; i++) acc.push(batch[i]);
+            readBatch();   // readEntries yields in chunks — keep going until empty
+          }
+        }, () => resolve([]));
+        readBatch();
+      } else { resolve([]); }
+    });
+  }
+
+  // ── Match uploaded assets to the HTML's relative media paths & inline ───
+  function relPathOf(f) { return (f._relPath || f.webkitRelativePath || f.name || '').replace(/\\/g, '/'); }
+  function baseNameOf(p) { p = String(p).split('?')[0].split('#')[0]; const i = p.lastIndexOf('/'); return i >= 0 ? p.slice(i + 1) : p; }
+  function normSrc(s) {
+    s = String(s || '').trim().split('?')[0].split('#')[0];
+    try { s = decodeURIComponent(s); } catch (_) {}
+    return s.replace(/^\.?\//, '').replace(/^\//, '').replace(/\\/g, '/');
+  }
+  function readDataURL(f) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = () => rej(r.error || new Error('read error'));
+      r.readAsDataURL(f);
+    });
+  }
+  async function inlineAssets(htmlText, assets) {
+    if (!assets || !assets.length) return { html: htmlText, inlined: 0, skipped: [] };
+    // Index assets by folder-relative path (and a folder-stripped variant) plus
+    // basename, so both "images/cat.png" and a bare "cat.png" resolve.
+    const byPath = new Map(), byName = new Map();
+    assets.forEach(f => {
+      const rp = relPathOf(f).toLowerCase();
+      byPath.set(rp, f);
+      const noTop = rp.replace(/^[^/]+\//, '');
+      if (noTop && noTop !== rp && !byPath.has(noTop)) byPath.set(noTop, f);
+      const bn = baseNameOf(rp);
+      if (bn && !byName.has(bn)) byName.set(bn, f);
+    });
+    function findAsset(src) {
+      const n = normSrc(src).toLowerCase();
+      if (!n) return null;
+      if (byPath.has(n)) return byPath.get(n);
+      for (const [p, f] of byPath) { if (p.endsWith('/' + n)) return f; }
+      const bn = baseNameOf(n);
+      return byName.has(bn) ? byName.get(bn) : null;
+    }
+    const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+    const targets = [];
+    doc.querySelectorAll('img[src], video[src], audio[src], video source[src], audio source[src]')
+      .forEach(el => targets.push({ el, attr: 'src' }));
+    doc.querySelectorAll('video[poster]').forEach(el => targets.push({ el, attr: 'poster' }));
+    let budget = 4.3 * 1024 * 1024;   // keep the final string within sessionStorage quota
+    let inlined = 0; const skipped = [];
+    for (const t of targets) {
+      const s = t.el.getAttribute(t.attr) || '';
+      if (/^(https?:|data:|blob:)/i.test(s)) continue;   // already resolvable
+      const f = findAsset(s);
+      if (!f) continue;                                  // not provided → stays a placeholder
+      if (f.size > budget) { skipped.push(baseNameOf(relPathOf(f))); continue; }
+      try {
+        const url = await readDataURL(f);
+        t.el.setAttribute(t.attr, url);
+        budget -= url.length;
+        inlined++;
+      } catch (_) { skipped.push(baseNameOf(relPathOf(f))); }
+    }
+    return { html: '<!DOCTYPE html>\n' + doc.documentElement.outerHTML, inlined: inlined, skipped: skipped };
+  }
+
+  // Back-compat single-file entry (kept for any direct callers).
+  function handleFile(f) { if (f) handleFiles([f]); }
+
+  // A dropped/selected FOLDER can contain several .html files (a multi-page
+  // export, or — while testing — the app's own web folder). Blindly taking the
+  // first one loaded the WRONG page: if it was the editor's own index.html /
+  // room.html, the editor ended up rendering itself → nested chrome, "two
+  // topbars", layout chaos. Pick the real document intelligently instead:
+  //   1. Skip files that ARE the app's own shell (drop-zone / setMode markers).
+  //   2. Prefer an exact "index.html", then the shallowest path, then largest.
+  const HTML_RE = /\.html?$/i;
+  function isAppShellHtml(text) {
+    if (!text) return false;
+    return /id=["']drop-zone["']/.test(text)             // our landing page
+        || /onclick=["']setMode\(/.test(text)            // our editor room shell
+        || /data-i18n=["']drop_big["']/.test(text);
+  }
+  function depthOf(f) { return (relPathOf(f).match(/\//g) || []).length; }
+  async function pickMainHtml(htmlFiles) {
+    if (htmlFiles.length === 1) return htmlFiles[0];
+    // Read each candidate once; drop the app's own shell pages.
+    const scored = [];
+    for (const f of htmlFiles) {
+      let text = '';
+      try { text = await f.text(); } catch (_) {}
+      if (isAppShellHtml(text)) continue;              // never load the editor into itself
+      scored.push({ f, text, name: baseNameOf(relPathOf(f)).toLowerCase(), depth: depthOf(f), size: f.size });
+    }
+    const pool = scored.length ? scored : htmlFiles.map(f => ({ f, name: baseNameOf(relPathOf(f)).toLowerCase(), depth: depthOf(f), size: f.size }));
+    pool.sort((a, b) => {
+      const ai = a.name === 'index.html' ? 0 : 1, bi = b.name === 'index.html' ? 0 : 1;
+      if (ai !== bi) return ai - bi;                    // index.html wins
+      if (a.depth !== b.depth) return a.depth - b.depth; // shallowest wins
+      return (b.size || 0) - (a.size || 0);              // then largest
+    });
+    return pool[0].f;
+  }
+
+  let submitting = false;   // guard so a room is only ever opened once per upload
+  async function handleFiles(fileList) {
+    if (submitting) return;
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    const htmlFiles = files.filter(f => HTML_RE.test(f.name));
+    if (!htmlFiles.length) { alert(msg('need_html')); return; }
+    const htmlFile = await pickMainHtml(htmlFiles);
+    if (!htmlFile) { alert(msg('need_html')); return; }
+    if (htmlFile.size > 5 * 1024 * 1024) { alert(msg('too_big')); return; }
+    // Commit SYNCHRONOUSLY, before any await, so a second concurrent call
+    // (double-fire / event bubbling) bails at the guard above instead of racing
+    // through the awaits and opening a second room.
+    submitting = true;
+    const assets = files.filter(f => f !== htmlFile && !/\.html?$/i.test(f.name));
+    let text;
+    try { text = await htmlFile.text(); }
+    catch (err) { submitting = false; alert(msg('open_fail') + ' ' + err.message); return; }
+    let result;
+    try { result = await inlineAssets(text, assets); }
+    catch (_) { result = { html: text, inlined: 0, skipped: [] }; }
+    const roomId = generateRoomId();
+    try {
+      sessionStorage.setItem('hce-init-html-' + roomId, result.html);
+      sessionStorage.setItem('hce-init-name-' + roomId, htmlFile.name);
+    } catch (err) {
+      submitting = false;
+      alert(msg('open_fail') + ' ' + err.message);
+      return;
+    }
+    rememberRoom({ roomId, filename: htmlFile.name });
+    if (result.skipped && result.skipped.length) {
+      // Non-blocking: these can still be added inside the editor.
+      console.warn('[hce] assets too large to inline, add them in the editor:', result.skipped.join(', '));
+    }
+    location.href = './room.html?room=' + roomId;
+  }
+
+  function generateRoomId() {
+    const chars = 'abcdefghijkmnpqrstuvwxyz23456789';
+    let id = '';
+    for (let i = 0; i < 8; i++) id += chars[Math.floor(Math.random() * chars.length)];
+    return id;
+  }
+
+  // ─── Recent files ────────────────────────────
+  const RECENT_KEY = 'hce-recent-files';
+  const RECENT_MAX = 12;
+  const STARTER_ROOM_ID = 'starter-guide-v12';
+
+  function starterFilename() {
+    const lang = localStorage.getItem('hce-lang')
+      || ((navigator.language || '').toLowerCase().startsWith('zh') ? 'zh' : 'en');
+    return lang === 'zh' ? '新手上手说明书.html' : 'Starter Guide.html';
+  }
+
+  function ensureStarterRecent() {
+    let list = loadRecent().filter(x => x.roomId !== 'starter-guide' && x.roomId !== 'starter-guide-v2' && x.roomId !== 'starter-guide-v3' && x.roomId !== 'starter-guide-v4' && x.roomId !== 'starter-guide-v5' && x.roomId !== 'starter-guide-v6' && x.roomId !== 'starter-guide-v7' && x.roomId !== 'starter-guide-v8' && x.roomId !== 'starter-guide-v9' && x.roomId !== 'starter-guide-v10' && x.roomId !== 'starter-guide-v11');
+    const hit = list.find(x => x.roomId === STARTER_ROOM_ID);
+    if (hit) {
+      if (!hit.filename) hit.filename = starterFilename();
+      saveRecent(list);
+      return;
+    }
+    const now = Date.now();
+    list.unshift({ roomId: STARTER_ROOM_ID, filename: starterFilename(), createdAt: now, lastOpenedAt: now });
+    saveRecent(list);
+  }
+
+  function loadRecent() {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); }
+    catch { return []; }
+  }
+  function saveRecent(list) {
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX))); }
+    catch {}
+  }
+  function rememberRoom({ roomId, filename }) {
+    const now = Date.now();
+    const list = loadRecent().filter(x => x.roomId !== roomId);
+    list.unshift({ roomId, filename, createdAt: now, lastOpenedAt: now });
+    saveRecent(list);
+  }
+  function removeRoom(roomId) {
+    saveRecent(loadRecent().filter(x => x.roomId !== roomId));
+    renderRecent();
+  }
+  function clearAllRoom() {
+    if (!confirm('Remove all recent files from this list? (Server copies are kept.)')) return;
+    localStorage.removeItem(RECENT_KEY);
+    renderRecent();
+  }
+  function timeAgo(ts) {
+    const s = Math.max(1, Math.floor((Date.now() - ts) / 1000));
+    if (s < 60) return 'just now';
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ago';
+    const d = Math.floor(h / 24);
+    if (d < 30) return d + 'd ago';
+    const mo = Math.floor(d / 30);
+    return mo + 'mo ago';
+  }
+  function renderRecent() {
+    const list = loadRecent();
+    const wrap = document.getElementById('recent');
+    const ul = document.getElementById('recent-list');
+    if (!list.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    ul.innerHTML = '';
+    list.forEach(item => {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <a href="./room.html?room=${encodeURIComponent(item.roomId)}">
+          <span class="ic">↻</span>
+          <span class="name" title="${escapeAttr(item.filename)}">${escapeText(item.filename)}</span>
+          <span class="ago">${timeAgo(item.lastOpenedAt || item.createdAt)}</span>
+          <button class="del" title="Remove from list">×</button>
+        </a>
+      `;
+      li.querySelector('.del').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        removeRoom(item.roomId);
+      });
+      ul.appendChild(li);
+    });
+  }
+  function escapeText(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function escapeAttr(s) {
+    return escapeText(s).replace(/"/g, '&quot;');
+  }
+  document.getElementById('recent-clear').addEventListener('click', clearAllRoom);
+  // 说明书暂不上线：先不把「新手上手说明书」自动注入首页「最近文件」。
+  // 将来要上线说明书时，取消下一行注释即可（starterFilename/ensureStarterRecent 已保留）。
+  // ensureStarterRecent();
+  renderRecent();
+</script>
+
+
+</body>
+</html>

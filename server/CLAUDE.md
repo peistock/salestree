@@ -39,11 +39,13 @@ server/
 │   ├── routes/
 │   │   ├── health.ts
 │   │   ├── ws.ts          # WebSocket /ws/chat
+│   │   ├── upload.ts      # POST /api/upload 文件上传
 │   │   ├── wechatKb.ts    # /wechat_kb 资讯看板页面与静态资源
 │   │   ├── companyLeads.ts# /api/wechat_kb/company_leads 线索聚合（公司视角）
 │   │   └── policy.ts      # /api/sales_policies 销售政策看板（飞书表格同步）
 │   └── utils/
-│       └── logger.ts
+│       ├── logger.ts
+│       └── fileStorage.ts # 上传文件保存、URL 映射、文件名安全化
 ├── scripts/
 │   └── spike.ts           # 本地验证脚本
 └── dist/                  # tsc 编译输出（gitignore）
@@ -69,6 +71,23 @@ server/
 - `src/memory/ConversationStore.ts` 管理 `conversation_threads` 与 `episodic_memory`。
 - 列表排序规则：`is_archived ASC, updated_at DESC`。
 - `activateThread` 只切换 `is_archived` 状态，**不更新 `updated_at`**；`updated_at` 只应由真实消息内容更新驱动，否则会导致侧边栏任务清单时间戳全部相同。
+
+## 文件上传与多模态消息
+
+- `POST /api/upload?user_id=&thread_id=` 接收 multipart 文件，保存到 `data/uploads/<userId>/<threadId>/<uuid>-<safeName>`。
+- 允许类型：图片（png/jpg/gif/webp）、PDF、Word（.docx）、Excel（.xls/.xlsx）、PPT（.pptx）、HTML；单文件 10MB 上限。
+- 上传后返回 `{ name, url, mimeType, size }`，`url` 为 `/data/uploads/...`，由 `/data` 静态资源挂载直接服务。
+- WebSocket `/ws/chat` 消息支持 `attachments` 字段；图片作为 `image_url` 进入 LLM prompt，文档以文件名+链接进入文本 prompt。
+- Agent 通过 `read_file`（文本/HTML/JSON/CSV 等）和 `read_document`（Word/Excel/PPT/PDF）工具读取文档内容；系统 prompt 要求用户上传文档后必须调用对应工具，不得以"无法读取本地文件"为由拒绝。
+
+## 资讯看板
+
+- `/wechat_kb` 由 `src/routes/wechatKb.ts` 直接服务 `third_party/wechat-digest-skill/output/digest.html`。
+- `POST /api/refresh_news_panel` 接收 JSON `{ accounts, token, cookie, since?, count? }`：
+  - 把 `token`/`cookie` 写入 `third_party/wechat-digest-skill/credentials.json`；
+  - 按 `accounts`（公众号名称数组）执行 `wechat_collector.py collect` → `analyze_kb.py` → `render_html.py`；
+  - 立即返回“已开始采集”提示，后台 detached 执行。
+- 前端 `public/chat.html` 提供账号 tag 输入、可折叠的 token/cookie 配置面板和“更新”按钮。
 
 ## 常用命令
 

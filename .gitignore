@@ -24,7 +24,12 @@ data/*
 !data/skills/**
 !data/assets/
 !data/assets/**
+!data/templates/
+!data/templates/**
 !data/searxng-settings.yml
+
+# HTML-Editor bundled dependencies (if installed locally)
+server/public/html-editor/node_modules/
 checkpoints/
 state/
 tasks/

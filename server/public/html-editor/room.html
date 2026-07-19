@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Always fetch a fresh HTML shell so updates show up without a hard refresh. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>HTML Editor · Room</title>
+<!-- Self-hosted collab libs (no CDN) — keep before any module script. -->
+<script type="importmap">
+{
+  "imports": {
+    "yjs": "./vendor/yjs.js",
+    "y-partykit/provider": "./vendor/y-partykit-provider.js"
+  }
+}
+</script>
+<!-- Warm the collab libs in parallel so the first connect doesn't stutter. -->
+<link rel="modulepreload" href="./vendor/yjs.js">
+<link rel="modulepreload" href="./vendor/y-partykit-provider.js">
+<link rel="icon" type="image/svg+xml" href="./assets/logo-mark.svg">
+<link rel="stylesheet" href="./styles/design.css">
+<style>
+  /* Shared cool-gray dot grid, matching the landing page. The editor chrome
+     (top bar, comment rail, status strip, gutter) sits on this; the user's
+     document in the canvas stays white, like a sheet on a dotted desk. */
+  :root {
+    --page-bg: hsl(220 8% 98%);
+    --dot-alpha: 0.15;
+    --dot-grid: radial-gradient(circle at 1px 1px, rgba(60, 64, 74, var(--dot-alpha)) 1px, transparent 0);
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Top bar ─────────────────────────────────── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 56px;
+    padding: 0 20px;
+    border-bottom: var(--rule-w) solid var(--rule);
+    background-color: var(--page-bg);
+    background-image: var(--dot-grid);
+    background-size: 22px 22px;
+    background-position: -1px -1px;
+    flex-shrink: 0;
+  }
+  .topbar .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: var(--text-md);
+    font-weight: 600;
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .topbar .brand .brand-mark {
+    height: 22px;
+    width: auto;
+    display: block;
+  }
+  .topbar .brand .beta-pill {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 2px 7px;
+    background: #fef3c7;
+    color: #92400e;
+    border-radius: 999px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .topbar .upload-btn {
+    height: 32px;
+    padding: 0 14px;
+    font-size: 12px;
+    border: 1.5px dashed var(--rule-strong);
+    background: var(--panel-2);
+    color: var(--ink-soft);
+    border-radius: var(--radius-sm);
+  }
+  .topbar .upload-btn:hover {
+    border-color: var(--signal);
+    background: var(--signal-soft);
+    color: var(--signal-ink);
+  }
+  .topbar .fname {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .topbar .users {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+    margin-right: 8px;
+  }
+  .topbar .avatar {
+    width: 26px; height: 26px;
+    background: var(--ink);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 50%;
+    letter-spacing: normal;
+    text-transform: none;
+    border: 2px solid var(--paper);
+  }
+  .topbar .avatar.me {
+    cursor: pointer;
+    box-shadow: 0 0 0 1px var(--rule-strong);
+  }
+  .topbar .avatar.me:hover { box-shadow: 0 0 0 2px var(--ink); }
+
+  /* ── Mode segmented ──────────────────────────── */
+  .topbar .modes {
+    display: inline-flex;
+    background: var(--panel-2);
+    border: var(--rule-w) solid var(--rule);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    gap: 2px;
+  }
+  .topbar .mode-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--muted);
+    border-radius: 3px;
+    transition: background 100ms, color 100ms;
+  }
+  .topbar .mode-btn:hover { color: var(--ink); }
+  .topbar .mode-btn.active {
+    background: var(--panel);
+    color: var(--ink);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* ── Main ───────────────────────────────────── */
+  .main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    min-height: 0;
+    background-color: var(--page-bg);
+    background-image: var(--dot-grid);
+    background-size: 22px 22px;
+    background-position: -1px -1px;
+  }
+  .canvas {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    min-width: 0;
+    background: #fff;
+  }
+  .canvas iframe {
+    width: 100%; height: 100%;
+    border: none;
+    display: block;
+    background: white;
+  }
+  /* Upload / import loading state — covers the canvas until the doc renders. */
+  .canvas-loading {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background-color: var(--page-bg);
+    background-image: var(--dot-grid);
+    background-size: 22px 22px;
+    background-position: -1px -1px;
+    transition: opacity .35s ease;
+  }
+  .canvas-loading.hide { opacity: 0; pointer-events: none; }
+  /* Slide-deck pager — always present, centered & subtle in the top bar.
+     Active only when an interactive deck is detected; otherwise the arrows
+     sit in a light, disabled (non-clickable) state. Centered on a small
+     bar-coloured patch so it never collides with the filename text. */
+  .topbar .slide-pager {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    padding: 0 3px;
+    border-radius: 8px;
+    background: var(--page-bg);
+  }
+  /* Circular outlined buttons — reads as a slide pager (carousel-style),
+     not undo/redo. */
+  .slide-pager .sp-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid #d4d4d1;
+    background: transparent;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 0 1px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 100ms, color 100ms, border-color 100ms;
+  }
+  .slide-pager .sp-btn:hover { background: var(--grey-1, #f0f0ee); border-color: var(--muted); color: var(--ink); }
+  .slide-pager .sp-btn:active { background: var(--grey-2, #e4e4e2); }
+  /* No focus box around the arrows, ever (keys already navigate). */
+  .slide-pager .sp-btn:focus,
+  .slide-pager .sp-btn:focus-visible { outline: none; box-shadow: none; }
+  /* Not a slide deck → light circle, non-clickable. */
+  .slide-pager .sp-btn:disabled { color: #cdcdca; border-color: #e8e8e5; cursor: default; }
+  .slide-pager .sp-btn:disabled:hover { background: transparent; border-color: #e8e8e5; color: #cdcdca; }
+  .canvas-loading .cl-spin {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    border: 3px solid rgba(60, 64, 74, 0.16);
+    border-top-color: var(--signal);
+    animation: cl-rot 0.8s linear infinite;
+  }
+  @keyframes cl-rot { to { transform: rotate(360deg); } }
+  .canvas-loading .cl-text { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .canvas-loading .cl-sub { font-size: 12px; color: var(--muted); margin-top: -8px; }
+
+  /* ── Sidebar ────────────────────────────────── */
+  .sidebar {
+    width: 340px;
+    border-left: var(--rule-w) solid var(--rule);
+    /* Same cool dot grid as the landing page, so the comment rail feels
+       part of the brand. White composer/cards inside pop against it. */
+    background-color: var(--page-bg);
+    background-image: var(--dot-grid);
+    background-size: 22px 22px;
+    background-position: -1px -1px;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .sidebar.hide { display: none; }
+  .sb-head {
+    padding: 12px 18px 8px;
+    display: flex;
+    align-items: center;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .sb-head .count {
+    margin-left: 8px;
+    background: var(--panel-2);
+    color: var(--muted);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .sb-head .general-btn {
+    margin-left: auto;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1;
+    background: var(--panel);
+    border: var(--rule-w) solid var(--rule-strong);
+    border-radius: 50%;
+    color: var(--ink-soft);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sb-head .general-btn:hover { background: var(--panel-2); color: var(--ink); }
+
+  /* ── Inline composer (when there's a pending selection or general comment) ── */
+  .composer {
+    margin: 4px 14px 12px;
+    padding: 12px;
+    background: var(--signal-soft);
+    border: var(--rule-w) solid #ffd4be;
+    border-radius: var(--radius-sm);
+  }
+  .composer .targets {
+    margin-bottom: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .composer .target-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--panel);
+    border: var(--rule-w) solid #ffd4be;
+    border-radius: 999px;
+    padding: 2px 8px 2px 10px;
+    font-size: 11px;
+    color: var(--ink-soft);
+    max-width: 180px;
+  }
+  .composer .target-chip .snip {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 130px;
+  }
+  .composer .target-chip .x {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 0 0 2px;
+  }
+  .composer .target-chip .x:hover { color: var(--error); }
+  .composer .target-chip.general {
+    background: var(--panel-2);
+    color: var(--muted);
+    border-style: dashed;
+  }
+  .composer .hint {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+  .composer textarea {
+    width: 100%;
+    min-height: 78px;
+    border: var(--rule-w) solid var(--rule-strong);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    font-size: var(--text-sm);
+    background: var(--panel);
+    resize: vertical;
+    outline: none;
+  }
+  .composer textarea:focus { border-color: var(--signal); }
+  .composer .actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    align-items: center;
+  }
+  .composer .actions .key-hint {
+    font-size: 11px;
+    color: var(--subtle);
+  }
+  .composer .actions .btns { margin-left: auto; display: flex; gap: 6px; }
+  .composer .btn { height: 30px; padding: 0 12px; font-size: 12px; }
+
+  /* ── Comment list ────────────────────────────── */
+  .sb-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 14px 16px;
+  }
+  .sb-empty {
+    padding: 40px 8px;
+    text-align: center;
+    color: var(--subtle);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+  }
+  .sb-item {
+    background: var(--panel);
+    border: var(--rule-w) solid var(--rule);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 100ms, box-shadow 100ms;
+  }
+  .sb-item:hover {
+    border-color: var(--rule-strong);
+    box-shadow: var(--shadow-card);
+  }
+  .sb-item .meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .sb-item .author {
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .sb-item .ref-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+  .sb-item .ref-tag {
+    font-size: 11px;
+    color: var(--ink-soft);
+    background: var(--panel-2);
+    border: var(--rule-w) solid var(--rule);
+    border-radius: 4px;
+    padding: 2px 8px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.5;
+  }
+  .sb-item .body {
+    font-size: var(--text-sm);
+    color: var(--ink);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .sb-item .del {
+    position: absolute;
+    top: 6px; right: 6px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--subtle);
+    font-size: 14px;
+    padding: 2px 8px;
+    opacity: 0;
+    border-radius: 4px;
+    line-height: 1;
+  }
+  .sb-item:hover .del { opacity: 1; }
+  .sb-item .del:hover { color: var(--error); background: var(--panel-2); }
+  .sb-item .edit {
+    position: absolute;
+    top: 6px; right: 32px;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--subtle); font-size: 12px; padding: 2px 7px; opacity: 0;
+    border-radius: 4px; line-height: 1;
+  }
+  .sb-item:hover .edit { opacity: 1; }
+  .sb-item .edit:hover { color: var(--ink); background: var(--panel-2); }
+  .sb-item .meta .edited { color: var(--subtle); font-size: 11px; margin-left: 6px; }
+  .sb-item .cmt-edit-input {
+    width: 100%; resize: vertical; font-family: inherit; font-size: var(--text-sm);
+    line-height: 1.5; padding: 8px 10px; color: var(--ink);
+    background: var(--panel); border: 1px solid var(--rule-strong);
+    border-radius: var(--radius-sm); outline: none;
+  }
+  .sb-item .cmt-edit-input:focus { border-color: var(--signal); }
+  .sb-item .cmt-edit-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+  .sb-item .cmt-edit-actions button {
+    height: 28px; padding: 0 12px; font-size: 12px; cursor: pointer;
+    border-radius: var(--radius-sm); border: 1px solid var(--rule-strong);
+    background: var(--panel); color: var(--ink);
+  }
+  .sb-item .cmt-edit-actions .cmt-save { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+  /* ── Popovers ────────────────────────────────── */
+  .popover {
+    position: absolute;
+    top: 52px;
+    right: 16px;
+    background: var(--panel);
+    border: var(--rule-w) solid var(--rule);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lift);
+    min-width: 240px;
+    z-index: 100;
+    padding: 6px;
+    display: none;
+  }
+  .popover.show { display: block; }
+  .popover .item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    color: var(--ink);
+  }
+  .popover .item:hover { background: var(--panel-2); }
+  .popover .item .sub {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .popover .sep {
+    height: 1px;
+    background: var(--rule);
+    margin: 4px 6px;
+  }
+  /* Share popover */
+  .popover.share-pop {
+    padding: 14px 14px 12px;
+    min-width: 360px;
+  }
+  .share-head {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .share-input-row {
+    display: flex;
+    gap: 6px;
+  }
+  .share-input-row input {
+    flex: 1;
+    height: 36px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--panel-2);
+    border: var(--rule-w) solid var(--rule-strong);
+    border-radius: var(--radius-sm);
+    padding: 0 10px;
+    color: var(--ink);
+  }
+  .share-input-row .btn { height: 36px; }
+
+  /* ── Status strip ───────────────────────────── */
+  .status-strip {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 32px;
+    padding: 0 20px;
+    background-color: var(--page-bg);
+    background-image: var(--dot-grid);
+    background-size: 22px 22px;
+    background-position: -1px -1px;
+    border-top: var(--rule-w) solid var(--rule);
+    color: var(--muted);
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .status-strip .dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+  .status-strip .dot.live { background: var(--signal); animation: pulse 1.6s ease-in-out infinite; }
+  .status-strip .dot.offline { background: var(--subtle); }
+  .status-strip .dot.ok { background: var(--ok); }
+  .status-strip .sep { color: var(--rule-strong); }
+  .status-strip .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:.35} }
+
+  /* ── Modal ───────────────────────────────────── */
+  .modal-bg {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 9990;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 30px;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: var(--panel);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lift);
+    width: 100%;
+    max-width: 640px;
+    max-height: 84vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .modal-head {
+    padding: 18px 24px;
+    border-bottom: var(--rule-w) solid var(--rule);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .modal-head h2 {
+    font-size: var(--text-md);
+    font-weight: 600;
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 20px;
+    padding: 2px 8px;
+    line-height: 1;
+  }
+  .modal-close:hover { color: var(--ink); }
+  .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+  }
+  .modal-body .hint {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .modal-body textarea {
+    width: 100%;
+    height: 360px;
+    padding: 12px 14px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    background: var(--panel-2);
+    border-radius: var(--radius-sm);
+    outline: none;
+    resize: none;
+    color: var(--ink);
+  }
+  .modal-foot {
+    padding: 14px 24px;
+    border-top: var(--rule-w) solid var(--rule);
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  /* ── Nickname modal ─────────────────────────── */
+  .nick-modal { max-width: 420px; }
+  .nick-modal .modal-body { padding: 28px 24px 24px; }
+  .nick-modal h3 {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+  .nick-modal .sub {
+    color: var(--muted);
+    font-size: var(--text-sm);
+    margin-bottom: 22px;
+  }
+  .nick-modal .form-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .nick-modal .form-row label {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    width: 56px;
+  }
+  .nick-modal input {
+    flex: 1;
+    height: 38px;
+    font-size: var(--text-sm);
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    font-variant-ligatures: normal;
+  }
+  .nick-modal .colors {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .nick-modal .color-chip {
+    width: 28px; height: 28px;
+    border: 2px solid var(--panel);
+    box-shadow: 0 0 0 1px var(--rule-strong);
+    cursor: pointer;
+    border-radius: 50%;
+  }
+  .nick-modal .color-chip.selected {
+    box-shadow: 0 0 0 2px var(--ink);
+  }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar" style="position:relative;">
+  <a class="brand" href="./index.html"><img class="brand-mark" src="./assets/logo-mark.svg" alt="">HTML Editor<span class="beta-pill">BETA</span></a>
+
+  <label class="btn btn-ghost upload-btn" for="reupload-input" data-i18n="upload" data-i18n-title="upload_t" title="Upload a new file to replace the current document">↑ Upload</label>
+  <input type="file" id="reupload-input" accept=".html,.htm" style="display:none">
+
+  <span class="fname" id="fname">—</span>
+
+  <div class="users" id="users"></div>
+
+  <!-- Slide pager — subtle, in the bar; only shown when a deck is detected. -->
+  <div class="slide-pager" id="slide-pager">
+    <button class="sp-btn" id="slide-prev" type="button" disabled data-i18n-title="slide_prev" title="上一页（←）" aria-label="Previous slide">‹</button>
+    <button class="sp-btn" id="slide-next" type="button" disabled data-i18n-title="slide_next" title="下一页（→）" aria-label="Next slide">›</button>
+  </div>
+
+  <div class="modes" role="tablist" aria-label="Mode">
+    <button class="mode-btn" data-mode="view" onclick="setMode('view')" data-i18n-title="view" title="阅读" aria-label="View">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+    </button>
+    <button class="mode-btn active" data-mode="edit" onclick="setMode('edit')" data-i18n-title="edit" title="编辑" aria-label="Edit">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>
+    </button>
+    <button class="mode-btn" data-mode="drag" onclick="setMode('drag')" data-i18n-title="drag" title="拖拽" aria-label="Move">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"></polyline><polyline points="9 5 12 2 15 5"></polyline><polyline points="15 19 12 22 9 19"></polyline><polyline points="19 9 22 12 19 15"></polyline><line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line></svg>
+    </button>
+    <button class="mode-btn" data-mode="comment" onclick="setMode('comment')" data-i18n-title="comment" title="批注" aria-label="Comment">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+    </button>
+  </div>
+
+  <div style="position:relative;">
+    <button class="btn" id="share-btn" onclick="toggleShareMenu(event)" data-i18n="share">Share</button>
+    <div class="popover share-pop" id="share-menu">
+      <div class="share-head" data-i18n="share_head">Anyone with this link can view and edit</div>
+      <div class="share-input-row">
+        <input type="text" id="share-url" readonly>
+        <button class="btn btn-primary" id="share-copy" data-i18n="copy">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="position:relative;">
+    <button class="btn btn-signal" id="export-btn" onclick="toggleExportMenu(event)" data-i18n="export">Export ▾</button>
+    <div class="popover" id="export-menu">
+      <button class="item" onclick="exportHTML()">
+        <span data-i18n="exp_dl">Download HTML</span>
+        <span class="sub" data-i18n="exp_dl_sub">Clean .html file — no comments. For sharing or final use.</span>
+      </button>
+      <div class="sep"></div>
+      <button class="item" onclick="exportForAI()">
+        <span data-i18n="exp_ai">Hand off to AI</span>
+        <span class="sub" data-i18n="exp_ai_sub">HTML + comments as a Markdown prompt — copy or download .md.</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Main: canvas + sidebar -->
+<div class="main">
+  <div class="canvas mode-edit" id="canvas">
+    <!-- allow-popups(-to-escape-sandbox): lets a link-bound block open its URL in
+         a new tab (window.open) from View mode; without it the sandbox blocks it. -->
+    <iframe id="iframe" sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox"></iframe>
+    <!-- Shown until the document iframe is ready. Visible by default so it
+         appears instantly (even before room.js parses a large upload); room.js
+         fades it out on the iframe 'ready' message. -->
+    <div class="canvas-loading" id="canvas-loading">
+      <div class="cl-spin"></div>
+      <div class="cl-text" data-i18n="loading">Loading document…</div>
+      <div class="cl-sub" data-i18n="loading_sub">This can take a few seconds for large files.</div>
+    </div>
+  </div>
+
+  <div class="sidebar hide" id="sidebar">
+    <div class="sb-head">
+      <span data-i18n="comments">Comments</span><span class="count" id="cmt-count">0</span>
+      <button class="general-btn" id="general-btn" onclick="startGeneralComment()" data-i18n-title="general_t" title="Add a comment without anchoring to an element">+</button>
+    </div>
+
+    <div class="composer" id="composer" style="display:none;">
+      <div class="targets" id="composer-targets"></div>
+      <textarea id="cmt-input" data-i18n-ph="cmt_ph" placeholder="Write your comment…"></textarea>
+      <div class="actions">
+        <span class="key-hint" data-i18n="save_hint">⌘ + ↵ to save</span>
+        <div class="btns">
+          <button class="btn" onclick="cancelComposer()" data-i18n="cancel">Cancel</button>
+          <button class="btn btn-signal" onclick="saveComposer()" data-i18n="save">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sb-list" id="cmt-list"></div>
+  </div>
+</div>
+
+<!-- Status strip -->
+<div class="status-strip">
+  <span><span class="dot live" id="sync-dot"></span><span id="sync-label">Solo</span></span>
+  <span class="sep">·</span>
+  <span id="user-count">1 user</span>
+  <span class="sep">·</span>
+  <span id="save-state"><span class="dot ok"></span>Saved</span>
+  <span class="right">
+    <span style="font-size:11px;color:var(--subtle);">v0.1</span>
+  </span>
+</div>
+
+<!-- Nickname modal -->
+<div class="modal-bg" id="nick-modal-bg">
+  <div class="modal nick-modal">
+    <div class="modal-head">
+      <h2 id="nick-modal-title" data-i18n="nick_title">Editing together</h2>
+    </div>
+    <div class="modal-body">
+      <h3 data-i18n="nick_h">Pick a nickname</h3>
+      <p class="sub" data-i18n="nick_sub">So others know who edited and commented. No account needed.</p>
+      <div class="form-row">
+        <label data-i18n="nick_name">Name</label>
+        <input type="text" id="nick-name" data-i18n-ph="nick_name_ph" placeholder="Your name" maxlength="20" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="form-row" style="align-items:flex-start;">
+        <label style="padding-top:6px;" data-i18n="nick_color">Color</label>
+        <div class="colors" id="nick-colors"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="nick-cancel" style="display:none;" data-i18n="cancel">Cancel</button>
+      <button class="btn btn-primary" id="nick-submit" data-i18n="save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export-for-AI modal -->
+<div class="modal-bg" id="export-modal-bg">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 data-i18n="exp_ai">Hand off to AI</h2>
+      <button class="modal-close" onclick="closeExport()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="hint" data-i18n="exp_modal_hint">Paste into a chat for the next revision pass, or download as a Markdown file to attach in Claude Projects, NotebookLM, email, etc.</div>
+      <textarea id="export-text" readonly></textarea>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeExport()" data-i18n="close">Close</button>
+      <button class="btn" onclick="downloadExportMd()" data-i18n="dl_md">↓ Download .md</button>
+      <button class="btn btn-signal" onclick="copyExport()" data-i18n="copy">Copy</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast" style="position:fixed;bottom:60px;left:50%;transform:translateX(-50%) translateY(8px);background:var(--ink);color:var(--paper);padding:8px 16px;font-size:12px;border-radius:6px;opacity:0;transition:all 200ms;pointer-events:none;z-index:9998;"></div>
+
+<script type="module">
+  /* Cache-bust the editor JS chain ONLY when new code ships — not on every
+     load. The deploy workflow replaces __HCE_BUILD__ with the commit SHA, so
+     normal reloads hit the browser cache (fast + resilient on slow / flaky /
+     cross-border networks) while a fresh deploy fetches once. On localhost we
+     use a timestamp for dev convenience. The .catch surfaces a "refresh to
+     retry" hint instead of an endless spinner if a module fetch is dropped. */
+  (function () {
+    var isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    var token = isLocal ? String(Date.now()) : '__HCE_BUILD__';
+    import('./src/room.js?v=' + token).catch(function (e) {
+      console.error('[hce] editor failed to load:', e);
+      var cl = document.getElementById('canvas-loading');
+      if (!cl) return;
+      var sp = cl.querySelector('.cl-spin'); if (sp) sp.style.display = 'none';
+      var t = cl.querySelector('.cl-text');
+      var s = cl.querySelector('.cl-sub');
+      var zh = (navigator.language || '').toLowerCase().indexOf('zh') === 0;
+      if (t) t.textContent = zh ? '加载失败，请刷新页面重试' : 'Failed to load — please refresh.';
+      if (s) s.textContent = zh ? '若反复失败，可能是到服务器的网络连接不稳定。' : 'If it keeps failing, the connection to the server may be unstable.';
+    });
+  })();
+</script>
+</body>
+</html>

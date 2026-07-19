@@ -34,6 +34,34 @@ DEFAULT_OUT = os.path.join(OUTPUT_DIR, "digest.html")
 DATA_PLACEHOLDER = "__KB_DATA__"
 GENERATED_PLACEHOLDER = "__GENERATED_AT__"
 
+# 资讯看板只渲染用户配置的公众号（data/wechat_accounts.json）
+ACCOUNTS_FILE = os.path.join(SCRIPT_DIR, "..", "..", "data", "wechat_accounts.json")
+
+
+def _load_account_whitelist(fallback=None):
+    """读取配置的公众号白名单；文件不存在则返回 fallback（不过滤）。"""
+    if not os.path.exists(ACCOUNTS_FILE):
+        return fallback
+    try:
+        with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        accounts = [str(a).strip() for a in (data.get("accounts") or []) if str(a).strip()]
+        return set(accounts) if accounts else fallback
+    except Exception:
+        return fallback
+
+
+def _filter_kb_by_accounts(kb, accounts):
+    """按账号白名单过滤 KB；白名单为空则原样返回。"""
+    if not accounts:
+        return kb
+    filtered = {k: v for k, v in kb.items() if k != "articles"}
+    filtered["articles"] = {
+        aid: a for aid, a in kb.get("articles", {}).items()
+        if a.get("account") in accounts
+    }
+    return filtered
+
 
 def _load_kb(kb_path):
     if not os.path.exists(kb_path):
@@ -57,6 +85,8 @@ def render(kb_path=KB_PATH, out_path=None):
     if not os.path.exists(TEMPLATE_PATH):
         raise SystemExit(f"未找到模板 {TEMPLATE_PATH}")
     kb = _load_kb(kb_path)
+    whitelist = _load_account_whitelist()
+    kb = _filter_kb_by_accounts(kb, whitelist)
     template = open(TEMPLATE_PATH, "r", encoding="utf-8").read()
 
     data_json = _embed(json.dumps(kb, ensure_ascii=False))
@@ -78,7 +108,10 @@ def main():
     p.add_argument("--out", default=DEFAULT_OUT)
     args = p.parse_args()
     out = render(kb_path=args.kb, out_path=args.out)
-    n = len(_load_kb(args.kb).get("articles", {}))
+    full_kb = _load_kb(args.kb)
+    whitelist = _load_account_whitelist()
+    filtered_kb = _filter_kb_by_accounts(full_kb, whitelist)
+    n = len(filtered_kb.get("articles", {}))
     print(f"✓ 已生成离线工作台：{out}（{n} 篇）")
     print("  用浏览器打开它即可（双击或 file:// 直接访问）。")
 
