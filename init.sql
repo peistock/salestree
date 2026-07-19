@@ -274,3 +274,69 @@ INSERT INTO activities (activity_id, entity_type, entity_id, owner_id, activity_
     ('act_kuaishou_2', 'contact', 'ct_kuaishou_1', 'sales_001', 'email', 'outbound', '发送案例集和报价单', 'neutral'),
     ('act_xiaohongshu_1', 'account', 'acc_xiaohongshu', 'sales_001', 'call', 'outbound', '与陈总监初步沟通 KOL 合作模式', 'positive')
 ON CONFLICT (activity_id) DO NOTHING;
+
+-- ========== 商业化：组织与 LLM 用量计量 ==========
+
+CREATE TABLE IF NOT EXISTS organizations (
+    org_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    monthly_token_quota BIGINT NOT NULL DEFAULT 10000000,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE user_profiles
+    ADD COLUMN IF NOT EXISTS org_id TEXT DEFAULT 'org_default';
+
+-- 先插入默认组织并把已有用户归进去，再加外键约束
+INSERT INTO organizations (org_id, name, monthly_token_quota)
+VALUES ('org_default', '默认组织', 10000000)
+ON CONFLICT (org_id) DO NOTHING;
+
+UPDATE user_profiles
+SET org_id = COALESCE(org_id, 'org_default')
+WHERE org_id IS NULL;
+
+ALTER TABLE user_profiles
+    DROP CONSTRAINT IF EXISTS fk_user_profiles_org;
+
+ALTER TABLE user_profiles
+    ADD CONSTRAINT fk_user_profiles_org
+        FOREIGN KEY (org_id) REFERENCES organizations(org_id)
+        ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS llm_usage (
+    id BIGSERIAL PRIMARY KEY,
+    org_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    thread_id TEXT NOT NULL,
+    model TEXT NOT NULL,
+    provider TEXT NOT NULL DEFAULT '',
+    input_tokens BIGINT NOT NULL DEFAULT 0,
+    output_tokens BIGINT NOT NULL DEFAULT 0,
+    total_tokens BIGINT NOT NULL DEFAULT 0,
+    cost_usd NUMERIC(12,8) NOT NULL DEFAULT 0,
+    cost_cny NUMERIC(12,8) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_llm_usage_org_created
+    ON llm_usage(org_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_llm_usage_user_created
+    ON llm_usage(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_llm_usage_thread_created
+    ON llm_usage(thread_id, created_at DESC);
+
+CREATE OR REPLACE FUNCTION update_org_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_organizations_updated_at ON organizations;
+CREATE TRIGGER trg_organizations_updated_at
+    BEFORE UPDATE ON organizations
+    FOR EACH ROW
+    EXECUTE FUNCTION update_org_updated_at();

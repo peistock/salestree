@@ -17,7 +17,11 @@ server/
 │   ├── config.ts          # 环境变量与配置
 │   ├── db/
 │   │   ├── index.ts       # PostgreSQL 连接
-│   │   └── schema.ts      # Drizzle schema
+│   │   ├── schema.ts      # Drizzle schema
+│   │   └── usageStore.ts  # LLM 用量与组织配额数据访问
+│   ├── llm/
+│   │   ├── provider.ts    # LLM provider 与 failover 封装
+│   │   └── pricing.ts     # 内部价目表（按 model/provider）
 │   ├── agent/
 │   │   ├── createAgent.ts # Pi Agent 工厂
 │   │   ├── Session.ts     # 单次用户交互封装
@@ -38,6 +42,7 @@ server/
 │   │   └── pythonProxy.ts # 调用 Python 遗留工具
 │   ├── routes/
 │   │   ├── health.ts
+│   │   ├── admin.ts       # Admin API：用量查询、组织配额管理
 │   │   ├── ws.ts          # WebSocket /ws/chat
 │   │   ├── upload.ts      # POST /api/upload 文件上传
 │   │   ├── editorSave.ts  # POST /api/editor/save HTML 编辑器保存
@@ -91,6 +96,21 @@ server/
 - `src/room.js` 从 `?file=` 参数加载 HTML，`src/collab.js` 在 embed 模式下走本地 Yjs，不连接 PartyKit。
 - `POST /api/editor/save` 接收 `{ url, html }`，校验路径必须在 `/data/uploads/` 下，覆盖写入原文件。
 - `public/chat.html` 对 HTML 文件显示 ✏️ 编辑按钮，点击在新标签页打开编辑器。
+
+## 商业化计量与配额
+
+- 新增 `organizations` 表与 `user_profiles.org_id`，每个用户归属一个组织。
+- 新增 `llm_usage` 表，每次 LLM assistant turn 在 `Session.ts` 的 `turn_end` 事件中落表，字段包括 `org_id/user_id/thread_id/model/provider/input_tokens/output_tokens/total_tokens/cost_usd/cost_cny`。
+- 价目表位于 `src/llm/pricing.ts`，按 model/provider 维护每 1M token 的 USD/CNY 价格；本地模型默认 0 成本。
+- 组织月度 token 配额 `organizations.monthly_token_quota`：
+  - WebSocket `/ws/chat` 在创建 `AgentSession` 前检查本月已用量，超配额立即返回错误。
+  - `Session.ts` 在每轮 `turn_end` 记录用量后再次检查，超配额调用 `agent.abort()` 并返回已生成的部分内容。
+- Admin API（`ADMIN_API_KEY` + 请求头 `X-Admin-Key`）：
+  - `GET /api/admin/usage?org_id=&user_id=&start_date=&end_date=&limit=&offset=`
+  - `GET /api/admin/usage/summary?org_id=&user_id=&start_date=&end_date=`
+  - `GET /api/admin/orgs`
+  - `PATCH /api/admin/orgs/:org_id/quota` body `{ monthly_token_quota: number }`
+- 当前没有真正的用户鉴权，`user_id` 由客户端自声明；配额拦截是“尽力而为”，等后续接入真实认证后再补强。
 
 ## 资讯看板
 

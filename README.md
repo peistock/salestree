@@ -23,6 +23,9 @@
 - [x] 销售政策看板：对接飞书表格，实时同步媒体端口返点政策与折扣控制线
 - [x] TypeScript 新服务端（`server/`）：Fastify + Pi Agent，承载 `/chat`、对话持久化、任务历史、文件上传与 HTML 在线编辑
 - [x] HTML 在线编辑器：基于 HTML-Editor，生成方案后可直接在浏览器编辑并保存回 `data/uploads/`
+- [x] LLM 用量计量：每次 assistant turn 记录 `org_id/user_id/thread_id/model/provider/tokens/cost` 到 `llm_usage`
+- [x] 组织月度 token 配额：WebSocket 运行前 + 每轮运行中超额拦截
+- [x] Admin API：`/api/admin/usage`、`/api/admin/usage/summary`、`/api/admin/orgs`、配额修改
 - [x] Streamlit 管理后台（`dashboard.py`）
 
 ## 项目结构
@@ -207,6 +210,29 @@ SEARXNG_URL=https://searxng.peistock.win
 - **总计：¥0/月**（全部本地运行，无 API 费用）
 
 > 备选：DeepSeek v4-flash / 百炼 qwen3.6-plus 在 `.env` 中切换 `BASE_URL` 即可启用。
+
+## Admin API（用量与配额）
+
+需要 `server/.env` 中配置 `ADMIN_API_KEY`，请求时带 header `X-Admin-Key`。
+
+```bash
+# 查看组织列表
+curl -H "X-Admin-Key: $ADMIN_API_KEY" http://localhost:8001/api/admin/orgs
+
+# 查看用量汇总
+curl -H "X-Admin-Key: $ADMIN_API_KEY" \
+  "http://localhost:8001/api/admin/usage/summary?org_id=org_default"
+
+# 修改组织月度 token 配额
+curl -X PATCH -H "X-Admin-Key: $ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"monthly_token_quota": 10000000}' \
+  http://localhost:8001/api/admin/orgs/org_default/quota
+```
+
+> 当前 `user_id` 仍由客户端自声明，配额拦截是“尽力而为”。接入真实认证后再补强。
+
+---
 
 ## 从 Git 克隆后直接使用
 

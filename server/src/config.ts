@@ -40,4 +40,7 @@ export const config = {
     maxDurationSeconds: Number(process.env.AGENT_MAX_DURATION_SECONDS ?? "180"),
     maxTotalTokens: Number(process.env.AGENT_MAX_TOTAL_TOKENS ?? "32000"),
   },
+  admin: {
+    apiKey: process.env.ADMIN_API_KEY ?? "",
+  },
 };

@@ -21,7 +21,7 @@ type: project
 
 | 假设 | 具体表述 | 若假设不成立的影响 |
 |------|---------|------------------|
-| **单销售团队** | 系统先服务一个销售团队/小代理商，暂不做多租户隔离 | 若未来规模化，需补充 team/tenant 数据层和权限层 |
+| **单销售团队** | 系统先服务一个销售团队/小代理商，暂不做完整多租户隔离 | 已落地最小组织模型（`organizations` + `user_profiles.org_id`）与 LLM 用量计量，但完整 RBAC/数据隔离仍待后续 |
 | **企微/工作渠道** | 销售人员主要在企业微信或 Web 聊天页使用 | 若团队不用企微，需强化 Web/邮件等替代通道 |
 | **Mac/混合部署** | 主服务可运行在本地 Mac 或云服务器；SearXNG 默认保留在本地网络 | 本地断网时搜索降级为浏览器百度搜索 fallback |
 | **混合部署** | 服务器运行销销主应用（FastAPI + PostgreSQL + 云/本地 LLM）；SearXNG 可保留本地 Mac，通过 Cloudflare Tunnel `searxng.peistock.win` 暴露 | 云端机房 IP 易被搜索引擎反爬虫拦截；本地网络断网时搜索降级为 Chrome 百度搜索 fallback。`.env` 中 `SEARXNG_URL` 控制指向本地还是远程域名 |

@@ -1,6 +1,7 @@
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { createLlmModel } from "../llm/provider.ts";
+import { calculateCost } from "../llm/pricing.ts";
 import { createTools } from "../tools/Toolkit.ts";
 import { scanAndNotify } from "../tools/careScanner.ts";
 import { Memory } from "../memory/Memory.ts";
@@ -8,6 +9,7 @@ import { AssociationEngine } from "../association/AssociationEngine.ts";
 import { SkillLoader } from "../skills/SkillLoader.ts";
 import { VectorStore } from "../knowledge/VectorStore.ts";
 import { ConversationStore } from "../memory/ConversationStore.ts";
+import { UsageStore } from "../db/usageStore.ts";
 import { IterationBudget } from "./IterationBudget.ts";
 import { injectAdPlanMethodology } from "./adPlanMethodologyInjector.ts";
 import fs from "node:fs";
@@ -40,6 +42,7 @@ export class AgentSession {
   private finalText = "";
   private turnCount = 0;
   private userId: string;
+  private orgId: string;
   private memory: Memory;
   private association: AssociationEngine;
   private skillLoader: SkillLoader;
@@ -48,12 +51,22 @@ export class AgentSession {
   private onBudgetExceeded?: (reason: string) => void;
   private threadId: string;
   private conversationStore: ConversationStore;
+  private usageStore: UsageStore;
   private activeSkillName?: string;
 
-  constructor(userId: string, userName = "", threadId: string, conversationStore: ConversationStore) {
+  constructor(
+    userId: string,
+    userName = "",
+    threadId: string,
+    conversationStore: ConversationStore,
+    orgId: string,
+    usageStore: UsageStore,
+  ) {
     this.userId = userId;
+    this.orgId = orgId;
     this.threadId = threadId;
     this.conversationStore = conversationStore;
+    this.usageStore = usageStore;
     const { model, streamFn } = createLlmModel();
     this.agent = new Agent({
       initialState: {
@@ -218,6 +231,46 @@ export class AgentSession {
           this.conversationStore.addMessage(this.userId, this.threadId, "assistant", this.finalText).catch((err) => {
             console.error("[session] 持久化助手消息失败:", err);
           });
+
+          // 记录 LLM 用量
+          if (msg.usage && msg.usage.totalTokens > 0) {
+            const cost = calculateCost(msg.model, msg.provider, msg.usage.input, msg.usage.output);
+            this.usageStore
+              .recordUsage({
+                orgId: this.orgId,
+                userId: this.userId,
+                threadId: this.threadId,
+                model: msg.model,
+                provider: msg.provider,
+                inputTokens: msg.usage.input,
+                outputTokens: msg.usage.output,
+                totalTokens: msg.usage.totalTokens,
+                costUsd: cost.costUsd,
+                costCny: cost.costCny,
+              })
+              .catch((err) => {
+                console.error("[session] 记录 LLM 用量失败:", err);
+              });
+
+            // 每轮结束后检查组织月度配额
+            const now = new Date();
+            this.usageStore
+              .getMonthlyUsage(this.orgId, now.getFullYear(), now.getMonth() + 1)
+              .then((used) => {
+                return this.usageStore.getOrganization(this.orgId).then((org) => ({ used, org }));
+              })
+              .then(({ used, org }) => {
+                if (org && used > org.monthly_token_quota) {
+                  const reason = "组织 LLM 月度额度";
+                  this.budget.markStopped(reason);
+                  this.onBudgetExceeded?.(reason);
+                  this.agent.abort();
+                }
+              })
+              .catch((err) => {
+                console.error("[session] 检查组织配额失败:", err);
+              });
+          }
         }
 
         const stopReason = this.budget.check(this.turnCount, this.agent.state.messages as any, responseContent);

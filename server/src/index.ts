@@ -18,6 +18,7 @@ import { companyLeadsRoutes } from "./routes/companyLeads.ts";
 import { salesPolicyRoutes } from "./routes/policy.ts";
 import { uploadRoutes } from "./routes/upload.ts";
 import { editorSaveRoutes } from "./routes/editorSave.ts";
+import { adminRoutes } from "./routes/admin.ts";
 import { ConversationStore } from "./memory/ConversationStore.ts";
 
 const conversationStore = new ConversationStore();
@@ -76,6 +77,7 @@ async function main() {
   await app.register(websocket);
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   await app.register(healthRoutes);
+  await app.register(adminRoutes);
   await app.register(uploadRoutes);
   await app.register(editorSaveRoutes);
   await app.register(wsChatRoutes);

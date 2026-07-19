@@ -98,6 +98,7 @@ cp .env.example .env
 | `MODEL_DAILY` / `MODEL_COMPLEX` / `MODEL_SUMMARY` | 默认 `qwen/qwen3.6-35b-a3b`（LM Studio） |
 | `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | 默认 localhost:5432，与 docker-compose.yml 一致 |
 | `SEARXNG_URL` | SearXNG 地址，本地 `http://127.0.0.1:8080`，服务器部署可指向 `https://searxng.peistock.win` |
+| `ADMIN_API_KEY` | **新增**：访问 `/api/admin/*` 用量与配额接口的认证密钥 |
 
 > `.env` 必须独立传输或重新填写，**不能通过压缩包传播**。
 
@@ -162,7 +163,16 @@ streamlit run dashboard.py --server.port 8501
    - 默认依赖 LM Studio 本地模型 `qwen/qwen3.6-35b-a3b`，端口 1234。
    - 如果新机器没有 GPU/内存不足，可在 `.env` 切到 DeepSeek / 百炼 API。
 
-3. **企业微信配置必须重新验证**
+3. **数据库 schema 会演进**
+   - `init.sql` 已包含商业化改造新增的 `organizations`、`llm_usage` 等表。
+   - 如果已有数据库是旧 schema，需要手动执行 `init.sql` 末尾新增段，或重建容器：
+     ```bash
+     docker-compose down db
+     docker volume rm salestree_db_data  # 会清空数据，谨慎操作
+     docker-compose up -d db
+     ```
+
+4. **企业微信配置必须重新验证**
    - 新机器的公网域名 / IP 如果变化，需要在企微后台更新可信 IP 和回调 URL。
 
 4. **不要提交 `.env`**

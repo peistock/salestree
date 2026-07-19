@@ -4,6 +4,7 @@ import fs from "fs";
 import { resolveUploadPath } from "../utils/fileStorage.ts";
 import { AgentSession, type OutgoingMessage } from "../agent/Session.ts";
 import { ConversationStore } from "../memory/ConversationStore.ts";
+import { UsageStore } from "../db/usageStore.ts";
 
 interface AttachmentMeta {
   name: string;
@@ -27,6 +28,7 @@ interface HistoryMessage {
 
 const activeSessions = new Map<string, AgentSession>();
 const conversationStore = new ConversationStore();
+const usageStore = new UsageStore();
 
 const DEDUP_TTL_MS = 60_000;
 const dedupCache = new Map<string, number>();
@@ -133,6 +135,25 @@ export async function wsChatRoutes(app: FastifyInstance) {
       // 串行：同一个 user_id 只保留最新会话，旧的中止
       activeSessions.get(userId)?.abort();
 
+      // 组织月度配额检查
+      let orgId: string;
+      try {
+        orgId = await usageStore.getOrgForUser(userId);
+        const org = await usageStore.getOrganization(orgId);
+        if (org) {
+          const now = new Date();
+          const used = await usageStore.getMonthlyUsage(orgId, now.getFullYear(), now.getMonth() + 1);
+          if (used >= org.monthly_token_quota) {
+            send({ type: "error", message: "当前组织本月 LLM 额度已用完，请联系管理员升级套餐。" });
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("[ws] 检查组织配额失败:", err);
+        send({ type: "error", message: "配额检查失败，请稍后再试" });
+        return;
+      }
+
       let threadId: string;
       try {
         threadId = await conversationStore.getOrCreateActiveThread(userId);
@@ -156,7 +177,7 @@ export async function wsChatRoutes(app: FastifyInstance) {
         return a;
       });
 
-      const session = new AgentSession(userId, "", threadId, conversationStore);
+      const session = new AgentSession(userId, "", threadId, conversationStore, orgId, usageStore);
       activeSessions.set(userId, session);
 
       send({ type: "status", message: "销销正在思考…" });
