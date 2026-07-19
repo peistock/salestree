@@ -286,7 +286,11 @@ CREATE TABLE IF NOT EXISTS organizations (
 );
 
 ALTER TABLE user_profiles
-    ADD COLUMN IF NOT EXISTS org_id TEXT DEFAULT 'org_default';
+    ADD COLUMN IF NOT EXISTS org_id TEXT DEFAULT 'org_default',
+    ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+
+CREATE INDEX IF NOT EXISTS idx_user_profiles_org
+    ON user_profiles(org_id, status);
 
 -- 先插入默认组织并把已有用户归进去，再加外键约束
 INSERT INTO organizations (org_id, name, monthly_token_quota)

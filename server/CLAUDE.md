@@ -18,7 +18,8 @@ server/
 │   ├── db/
 │   │   ├── index.ts       # PostgreSQL 连接
 │   │   ├── schema.ts      # Drizzle schema
-│   │   └── usageStore.ts  # LLM 用量与组织配额数据访问
+│   │   ├── usageStore.ts  # LLM 用量与组织配额数据访问
+│   │   └── userStore.ts   # 用户数据访问
 │   ├── llm/
 │   │   ├── provider.ts    # LLM provider 与 failover 封装
 │   │   └── pricing.ts     # 内部价目表（按 model/provider）
@@ -105,11 +106,19 @@ server/
 - 组织月度 token 配额 `organizations.monthly_token_quota`：
   - WebSocket `/ws/chat` 在创建 `AgentSession` 前检查本月已用量，超配额立即返回错误。
   - `Session.ts` 在每轮 `turn_end` 记录用量后再次检查，超配额调用 `agent.abort()` 并返回已生成的部分内容。
+- 用户管理：
+  - `src/db/userStore.ts` 提供用户 CRUD，`src/routes/admin.ts` 暴露 `GET/POST/PATCH /api/admin/users` 与 `POST /api/admin/users/:user_id/deactivate`。
+  - `ws.ts` 收到消息时默认调用 `userStore.ensureUserExists()` 自动创建占位用户（归属 `org_default`）。
+  - 设置 `REQUIRE_KNOWN_USERS=true` 可关闭自动创建，未知或禁用用户将被拒绝。
 - Admin API（`ADMIN_API_KEY` + 请求头 `X-Admin-Key`）：
   - `GET /api/admin/usage?org_id=&user_id=&start_date=&end_date=&limit=&offset=`
   - `GET /api/admin/usage/summary?org_id=&user_id=&start_date=&end_date=`
   - `GET /api/admin/orgs`
   - `PATCH /api/admin/orgs/:org_id/quota` body `{ monthly_token_quota: number }`
+  - `GET /api/admin/users`
+  - `POST /api/admin/users`
+  - `PATCH /api/admin/users/:user_id`
+  - `POST /api/admin/users/:user_id/deactivate`
 - 当前没有真正的用户鉴权，`user_id` 由客户端自声明；配额拦截是“尽力而为”，等后续接入真实认证后再补强。
 
 ## 资讯看板

@@ -38,6 +38,16 @@ from mind.memory import (
     get_today_overrides,
     delete_episodic_memory,
     get_conn,
+    list_organizations,
+    update_org_quota,
+    summarize_llm_usage,
+    list_llm_usage,
+    list_users_full,
+    create_user,
+    update_user,
+    get_user_full,
+    deactivate_user,
+    reactivate_user,
 )
 from mind.knowledge import KnowledgeBase
 
@@ -291,7 +301,7 @@ with col1:
 with col2:
     st.title("销销 外挂大脑")
 
-tabs = st.tabs(["📝 今日托付", "📰 晚间简报", "🚨 紧急插话", "🔍 记忆透明", "🏢 客户与商机", "📤 文档上传"])
+tabs = st.tabs(["📝 今日托付", "📰 晚间简报", "🚨 紧急插话", "🔍 记忆透明", "🏢 客户与商机", "📤 文档上传", "📈 LLM 用量", "👥 用户管理"])
 
 # ---------- 今日托付 ----------
 with tabs[0]:
@@ -643,3 +653,204 @@ with tabs[5]:
         kb.close()
     except Exception as e:
         st.error(f"加载文档列表失败: {e}")
+
+# ---------- LLM 用量 ----------
+with tabs[6]:
+    st.header("📈 LLM 用量")
+    st.caption("按组织、用户、时间维度查看 LLM token 消耗与成本")
+
+    try:
+        orgs = list_organizations()
+        org_options = {o["org_id"]: f"{o['name']}（{o['org_id']}）" for o in orgs}
+        org_options[""] = "全部组织"
+
+        # 加载用户选项
+        conn = get_conn()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as c:
+                c.execute("SELECT user_id, name FROM user_profiles WHERE status='active' ORDER BY name")
+                all_users = c.fetchall()
+        finally:
+            conn.close()
+        user_options = {u["user_id"]: f"{u['name']}（{u['user_id']}）" for u in all_users}
+        user_options[""] = "全部用户"
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            selected_org = st.selectbox("组织", options=[""] + list(org_options.keys()), format_func=lambda x: org_options.get(x, x), key="usage_org")
+        with col2:
+            selected_user = st.selectbox("用户", options=[""] + list(user_options.keys()), format_func=lambda x: user_options.get(x, x), key="usage_user")
+        with col3:
+            start_date = st.date_input("开始日期", date.today().replace(day=1), key="usage_start")
+        with col4:
+            end_date = st.date_input("结束日期", date.today(), key="usage_end")
+
+        filters = {
+            "org_id": selected_org or None,
+            "user_id": selected_user or None,
+            "start_date": start_date.isoformat() if start_date else None,
+            "end_date": end_date.isoformat() if end_date else None,
+        }
+
+        summary = summarize_llm_usage(**filters)
+
+        # 指标卡
+        m1, m2, m3, m4, m5 = st.columns(5)
+        with m1:
+            st.metric("请求数", summary["count"])
+        with m2:
+            st.metric("总 Tokens", f"{summary['total_tokens']:,}")
+        with m3:
+            st.metric("Input", f"{summary['input_tokens']:,}")
+        with m4:
+            st.metric("Output", f"{summary['output_tokens']:,}")
+        with m5:
+            st.metric("成本 USD", f"${summary['cost_usd']:.4f}")
+
+        # 组织配额进度
+        if selected_org:
+            org = next((o for o in orgs if o["org_id"] == selected_org), None)
+            if org:
+                quota = org["monthly_token_quota"]
+                used = org["used_tokens"]
+                pct = min(100.0, used / quota * 100) if quota > 0 else 0
+                st.progress(pct / 100, text=f"本月已用 {used:,} / {quota:,} tokens（{pct:.1f}%）")
+
+                with st.expander("修改月度配额"):
+                    new_quota = st.number_input("月度 token 配额", min_value=0, value=int(quota), step=100000, key=f"quota_{selected_org}")
+                    if st.button("保存配额", key=f"save_quota_{selected_org}"):
+                        if update_org_quota(selected_org, int(new_quota)):
+                            st.success("配额已更新")
+                            st.rerun()
+                        else:
+                            st.error("更新失败")
+
+        # 按 model 分组
+        if summary["by_model"]:
+            st.subheader("按模型分组")
+            model_df_data = []
+            for m in summary["by_model"]:
+                model_df_data.append({
+                    "模型": m["model"],
+                    "Provider": m["provider"],
+                    "请求数": int(m["count"]),
+                    "Input Tokens": int(m["input_tokens"]),
+                    "Output Tokens": int(m["output_tokens"]),
+                    "总 Tokens": int(m["total_tokens"]),
+                    "成本 USD": float(m["cost_usd"]),
+                    "成本 CNY": float(m["cost_cny"]),
+                })
+            st.dataframe(model_df_data, use_container_width=True)
+
+            # 简单柱状图
+            chart_data = {row["模型"]: row["总 Tokens"] for row in model_df_data}
+            if chart_data:
+                st.bar_chart(chart_data)
+
+        # 明细
+        st.subheader("用量明细")
+        detail = list_llm_usage(limit=100, **filters)
+        if detail["rows"]:
+            detail_data = []
+            for r in detail["rows"]:
+                detail_data.append({
+                    "时间": r["created_at"].strftime("%Y-%m-%d %H:%M") if hasattr(r["created_at"], "strftime") else r["created_at"],
+                    "用户": r["user_id"],
+                    "模型": r["model"],
+                    "Provider": r["provider"],
+                    "Input": int(r["input_tokens"]),
+                    "Output": int(r["output_tokens"]),
+                    "Total": int(r["total_tokens"]),
+                    "USD": float(r["cost_usd"]),
+                })
+            st.dataframe(detail_data, use_container_width=True)
+            st.caption(f"共 {detail['total']} 条，当前展示前 100 条")
+        else:
+            st.info("暂无用量记录")
+    except Exception as e:
+        st.error(f"加载用量数据失败: {e}")
+
+# ---------- 用户管理 ----------
+with tabs[7]:
+    st.header("👥 用户管理")
+    st.caption("创建、编辑、禁用用户，并分配组织")
+
+    try:
+        orgs = list_organizations()
+        org_options = {o["org_id"]: f"{o['name']}（{o['org_id']}）" for o in orgs}
+
+        # 新建用户
+        with st.expander("➕ 新建用户"):
+            with st.form("create_user"):
+                new_user_id = st.text_input("用户 ID（留空自动生成）", placeholder="例如 sales_003")
+                new_name = st.text_input("姓名 *")
+                new_role = st.text_input("角色", value="成员")
+                new_entity = st.selectbox("类型", ["sales", "user"], index=0)
+                new_org = st.selectbox("组织", options=list(org_options.keys()), format_func=lambda x: org_options.get(x, x))
+                new_team = st.text_input("团队 ID（可选）")
+                new_wechat = st.text_input("企微 ID（可选）")
+                submitted = st.form_submit_button("创建用户")
+                if submitted:
+                    if not new_name.strip():
+                        st.error("姓名不能为空")
+                    else:
+                        uid = new_user_id.strip() or f"user_{uuid.uuid4().hex[:8]}"
+                        if create_user(uid, new_name.strip(), new_role, new_entity, new_org, new_team or None, new_wechat or None):
+                            st.success(f"已创建用户：{uid}")
+                            st.rerun()
+                        else:
+                            st.error("用户 ID 已存在或创建失败")
+
+        # 用户列表
+        users = list_users_full()
+        if users:
+            st.subheader("用户列表")
+            df_data = []
+            for u in users:
+                df_data.append({
+                    "用户 ID": u["user_id"],
+                    "姓名": u["name"],
+                    "角色": u["role"],
+                    "类型": u["entity_type"],
+                    "组织": u.get("org_name") or u.get("org_id") or "-",
+                    "团队": u["team_id"] or "-",
+                    "状态": u["status"],
+                    "创建时间": u["created_at"].strftime("%Y-%m-%d %H:%M") if hasattr(u["created_at"], "strftime") else u["created_at"],
+                })
+            st.dataframe(df_data, use_container_width=True)
+
+            # 编辑/禁用操作
+            st.subheader("编辑用户")
+            edit_uid = st.selectbox("选择用户", options=[u["user_id"] for u in users], format_func=lambda x: f"{next((u['name'] for u in users if u['user_id']==x), x)}（{x}）")
+            if edit_uid:
+                edit_user = get_user_full(edit_uid)
+                if edit_user:
+                    with st.form(f"edit_user_{edit_uid}"):
+                        edit_name = st.text_input("姓名", value=edit_user["name"])
+                        edit_role = st.text_input("角色", value=edit_user["role"])
+                        edit_org = st.selectbox(
+                            "组织",
+                            options=list(org_options.keys()),
+                            format_func=lambda x: org_options.get(x, x),
+                            index=list(org_options.keys()).index(edit_user["org_id"]) if edit_user["org_id"] in org_options else 0,
+                        )
+                        edit_team = st.text_input("团队 ID（可选）", value=edit_user["team_id"] or "")
+                        edit_status = st.selectbox("状态", ["active", "disabled"], index=0 if edit_user["status"] == "active" else 1)
+                        save_submitted = st.form_submit_button("保存修改")
+                        if save_submitted:
+                            if update_user(
+                                edit_uid,
+                                name=edit_name.strip(),
+                                role=edit_role.strip(),
+                                org_id=edit_org,
+                                team_id=edit_team.strip() or None,
+                                status=edit_status,
+                            ):
+                                st.success("已更新")
+                                st.rerun()
+                            else:
+                                st.error("更新失败")
+        else:
+            st.info("暂无用户")
+    except Exception as e:
+        st.error(f"加载用户数据失败: {e}")

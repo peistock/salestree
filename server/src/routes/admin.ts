@@ -1,8 +1,10 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { config } from "../config.ts";
 import { UsageStore, type UsageFilters } from "../db/usageStore.ts";
+import { UserStore, type UserRecord } from "../db/userStore.ts";
 
 const usageStore = new UsageStore();
+const userStore = new UserStore();
 
 function parseDateParam(value: unknown): string | undefined {
   if (typeof value !== "string" || value.trim() === "") return undefined;
@@ -94,4 +96,91 @@ export async function adminRoutes(app: FastifyInstance) {
       }
     },
   );
+
+  // ---------- 用户管理 ----------
+  app.get("/api/admin/users", async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const query = req.query as Record<string, unknown>;
+      const filters: { activeOnly?: boolean; orgId?: string } = {};
+      if (query.active_only === "true") filters.activeOnly = true;
+      if (typeof query.org_id === "string" && query.org_id.trim()) {
+        filters.orgId = query.org_id.trim();
+      }
+      const users = await userStore.listUsers(filters);
+      return reply.send({ success: true, users });
+    } catch (err) {
+      console.error("[admin] 查询用户失败:", err);
+      return reply.status(500).send({ success: false, error: String(err) });
+    }
+  });
+
+  app.post("/api/admin/users", async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const body = req.body as Partial<UserRecord>;
+      if (!body.userId || !body.name) {
+        return reply.status(400).send({ success: false, error: "缺少 userId 或 name" });
+      }
+      const created = await userStore.createUser({
+        userId: body.userId.trim(),
+        name: body.name.trim(),
+        role: body.role?.trim() || "成员",
+        entityType: body.entityType?.trim() || "user",
+        orgId: body.orgId?.trim() || "org_default",
+        teamId: body.teamId?.trim(),
+        wechatUserId: body.wechatUserId?.trim(),
+        status: "active",
+      });
+      if (!created) {
+        return reply.status(409).send({ success: false, error: "用户已存在" });
+      }
+      return reply.status(201).send({ success: true, userId: body.userId.trim() });
+    } catch (err) {
+      console.error("[admin] 创建用户失败:", err);
+      return reply.status(500).send({ success: false, error: String(err) });
+    }
+  });
+
+  app.patch("/api/admin/users/:user_id", async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { user_id } = req.params as { user_id?: string };
+      const body = req.body as Partial<UserRecord>;
+      if (!user_id) {
+        return reply.status(400).send({ success: false, error: "缺少 user_id" });
+      }
+      const updates: Partial<UserRecord> = {};
+      if (body.name !== undefined) updates.name = body.name.trim();
+      if (body.role !== undefined) updates.role = body.role.trim();
+      if (body.entityType !== undefined) updates.entityType = body.entityType.trim();
+      if (body.orgId !== undefined) updates.orgId = body.orgId.trim();
+      if (body.teamId !== undefined) updates.teamId = body.teamId.trim() || undefined;
+      if (body.wechatUserId !== undefined) updates.wechatUserId = body.wechatUserId.trim() || undefined;
+      if (body.status !== undefined) updates.status = body.status.trim();
+
+      const updated = await userStore.updateUser(user_id, updates);
+      if (!updated) {
+        return reply.status(404).send({ success: false, error: "用户不存在或无变化" });
+      }
+      return reply.send({ success: true, user_id });
+    } catch (err) {
+      console.error("[admin] 更新用户失败:", err);
+      return reply.status(500).send({ success: false, error: String(err) });
+    }
+  });
+
+  app.post("/api/admin/users/:user_id/deactivate", async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { user_id } = req.params as { user_id?: string };
+      if (!user_id) {
+        return reply.status(400).send({ success: false, error: "缺少 user_id" });
+      }
+      const updated = await userStore.deactivateUser(user_id);
+      if (!updated) {
+        return reply.status(404).send({ success: false, error: "用户不存在" });
+      }
+      return reply.send({ success: true, user_id, status: "disabled" });
+    } catch (err) {
+      console.error("[admin] 禁用用户失败:", err);
+      return reply.status(500).send({ success: false, error: String(err) });
+    }
+  });
 }

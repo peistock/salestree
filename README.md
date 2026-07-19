@@ -25,8 +25,9 @@
 - [x] HTML 在线编辑器：基于 HTML-Editor，生成方案后可直接在浏览器编辑并保存回 `data/uploads/`
 - [x] LLM 用量计量：每次 assistant turn 记录 `org_id/user_id/thread_id/model/provider/tokens/cost` 到 `llm_usage`
 - [x] 组织月度 token 配额：WebSocket 运行前 + 每轮运行中超额拦截
-- [x] Admin API：`/api/admin/usage`、`/api/admin/usage/summary`、`/api/admin/orgs`、配额修改
-- [x] Streamlit 管理后台（`dashboard.py`）
+- [x] Admin API：`/api/admin/usage`、`/api/admin/usage/summary`、`/api/admin/orgs`、配额修改、用户 CRUD
+- [x] Streamlit 管理后台（`dashboard.py`）：含 LLM 用量看板 + 用户管理
+- [x] WebSocket 幽灵用户处理：默认自动创建占位用户，可选 `REQUIRE_KNOWN_USERS=true` 严格校验
 
 ## 项目结构
 
@@ -211,7 +212,7 @@ SEARXNG_URL=https://searxng.peistock.win
 
 > 备选：DeepSeek v4-flash / 百炼 qwen3.6-plus 在 `.env` 中切换 `BASE_URL` 即可启用。
 
-## Admin API（用量与配额）
+## Admin API（用量、配额与用户）
 
 需要 `server/.env` 中配置 `ADMIN_API_KEY`，请求时带 header `X-Admin-Key`。
 
@@ -228,9 +229,22 @@ curl -X PATCH -H "X-Admin-Key: $ADMIN_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"monthly_token_quota": 10000000}' \
   http://localhost:8001/api/admin/orgs/org_default/quota
+
+# 查看用户列表
+curl -H "X-Admin-Key: $ADMIN_API_KEY" http://localhost:8001/api/admin/users
+
+# 创建用户
+curl -X POST -H "X-Admin-Key: $ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"sales_003","name":"张三","role":"销售代表","entityType":"sales","orgId":"org_default"}' \
+  http://localhost:8001/api/admin/users
+
+# 禁用用户
+curl -X POST -H "X-Admin-Key: $ADMIN_API_KEY" \
+  http://localhost:8001/api/admin/users/sales_003/deactivate
 ```
 
-> 当前 `user_id` 仍由客户端自声明，配额拦截是“尽力而为”。接入真实认证后再补强。
+> 当前 `user_id` 仍由客户端自声明，但 WS 会默认自动创建占位用户；设置 `REQUIRE_KNOWN_USERS=true` 可让未知/禁用用户被拒绝。
 
 ---
 

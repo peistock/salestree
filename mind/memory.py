@@ -57,7 +57,13 @@ def init_db():
             ADD COLUMN IF NOT EXISTS writing_patterns JSONB DEFAULT '{}',
             ADD COLUMN IF NOT EXISTS entity_type TEXT DEFAULT 'user',
             ADD COLUMN IF NOT EXISTS team_id TEXT DEFAULT NULL,
-            ADD COLUMN IF NOT EXISTS wechat_user_id TEXT DEFAULT NULL;
+            ADD COLUMN IF NOT EXISTS wechat_user_id TEXT DEFAULT NULL,
+            ADD COLUMN IF NOT EXISTS org_id TEXT DEFAULT 'org_default',
+            ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+        """)
+        c.execute("""
+            CREATE INDEX IF NOT EXISTS idx_user_profiles_org
+            ON user_profiles(org_id, status);
         """)
         c.execute("""
             ALTER TABLE accounts
@@ -1598,12 +1604,12 @@ def get_sales_users() -> List[dict]:
 
 
 def get_all_users() -> List[dict]:
-    """获取所有用户（dashboard 用）"""
+    """获取所有活跃用户（dashboard 用）"""
     conn = get_conn()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as c:
             c.execute(
-                "SELECT user_id, name, role FROM user_profiles ORDER BY name"
+                "SELECT user_id, name, role FROM user_profiles WHERE status='active' ORDER BY name"
             )
             return c.fetchall()
     finally:
@@ -1629,6 +1635,394 @@ def get_user_profile(user_id: str) -> dict:
             return dict(row) if row else {}
     finally:
         conn.close()
+
+
+# ========== 商业化：组织、用量与用户管理 ==========
+
+def list_organizations() -> List[dict]:
+    """返回组织列表，附带用户数和当月已用 token"""
+    conn = get_conn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as c:
+            c.execute(
+                """
+                SELECT
+                    o.org_id,
+                    o.name,
+                    o.monthly_token_quota,
+                    o.created_at,
+                    o.updated_at,
+                    COUNT(u.user_id) FILTER (WHERE u.status = 'active') AS active_user_count
+                FROM organizations o
+                LEFT JOIN user_profiles u ON u.org_id = o.org_id
+                GROUP BY o.org_id, o.name, o.monthly_token_quota, o.created_at, o.updated_at
+                ORDER BY o.created_at DESC
+                """
+            )
+            orgs = c.fetchall()
+            # 当月已用 token
+            now = datetime.now()
+            start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            if now.month == 12:
+                end = now.replace(year=now.year + 1, month=1, day=1)
+            else:
+                end = now.replace(month=now.month + 1, day=1)
+            c.execute(
+                """
+                SELECT org_id, COALESCE(SUM(total_tokens), 0) AS used_tokens
+                FROM llm_usage
+                WHERE created_at >= %s AND created_at < %s
+                GROUP BY org_id
+                """,
+                (start, end)
+            )
+            usage_map = {row["org_id"]: int(row["used_tokens"]) for row in c.fetchall()}
+            for org in orgs:
+                org["used_tokens"] = usage_map.get(org["org_id"], 0)
+            return orgs
+    finally:
+        conn.close()
+
+
+def get_organization(org_id: str) -> Optional[dict]:
+    conn = get_conn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as c:
+            c.execute(
+                "SELECT org_id, name, monthly_token_quota, created_at, updated_at FROM organizations WHERE org_id=%s",
+                (org_id,)
+            )
+            row = c.fetchone()
+            return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def update_org_quota(org_id: str, quota: int) -> bool:
+    """更新组织月度 token 配额"""
+    conn = get_conn()
+    try:
+        with conn.cursor() as c:
+            c.execute(
+                """
+                UPDATE organizations
+                SET monthly_token_quota = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE org_id = %s
+                """,
+                (quota, org_id)
+            )
+            conn.commit()
+            return c.rowcount > 0
+    finally:
+        conn.close()
+
+
+def get_monthly_usage(org_id: str, year: int, month: int) -> int:
+    """按自然月汇总某组织的 total_tokens"""
+    start = datetime(year, month, 1)
+    if month == 12:
+        end = datetime(year + 1, 1, 1)
+    else:
+        end = datetime(year, month + 1, 1)
+    conn = get_conn()
+    try:
+        with conn.cursor() as c:
+            c.execute(
+                """
+                SELECT COALESCE(SUM(total_tokens), 0) AS total
+                FROM llm_usage
+                WHERE org_id = %s AND created_at >= %s AND created_at < %s
+                """,
+                (org_id, start, end)
+            )
+            return int(c.fetchone()[0])
+    finally:
+        conn.close()
+
+
+def summarize_llm_usage(
+    org_id: str = None,
+    user_id: str = None,
+    thread_id: str = None,
+    start_date: str = None,
+    end_date: str = None,
+) -> dict:
+    """汇总 LLM 用量，支持按 org/user/thread/日期过滤"""
+    conditions = []
+    params = []
+
+    def add_filter(column: str, value):
+        if value:
+            conditions.append(f"{column} = %s")
+            params.append(value)
+
+    add_filter("org_id", org_id)
+    add_filter("user_id", user_id)
+    add_filter("thread_id", thread_id)
+    if start_date:
+        conditions.append("created_at >= %s")
+        params.append(start_date)
+    if end_date:
+        conditions.append("created_at < %s::timestamp + INTERVAL '1 day'")
+        params.append(end_date)
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    conn = get_conn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as c:
+            c.execute(
+                f"""
+                SELECT
+                    COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                    COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                    COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                    COALESCE(SUM(cost_usd), 0) AS cost_usd,
+                    COALESCE(SUM(cost_cny), 0) AS cost_cny,
+                    COUNT(*) AS count
+                FROM llm_usage
+                {where_clause}
+                """,
+                tuple(params)
+            )
+            total = dict(c.fetchone())
+
+            c.execute(
+                f"""
+                SELECT
+                    model,
+                    provider,
+                    COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                    COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                    COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                    COALESCE(SUM(cost_usd), 0) AS cost_usd,
+                    COALESCE(SUM(cost_cny), 0) AS cost_cny,
+                    COUNT(*) AS count
+                FROM llm_usage
+                {where_clause}
+                GROUP BY model, provider
+                ORDER BY total_tokens DESC
+                """,
+                tuple(params)
+            )
+            by_model = [dict(row) for row in c.fetchall()]
+
+            return {
+                "input_tokens": int(total["input_tokens"]),
+                "output_tokens": int(total["output_tokens"]),
+                "total_tokens": int(total["total_tokens"]),
+                "cost_usd": float(total["cost_usd"]),
+                "cost_cny": float(total["cost_cny"]),
+                "count": int(total["count"]),
+                "by_model": by_model,
+            }
+    finally:
+        conn.close()
+
+
+def list_llm_usage(
+    org_id: str = None,
+    user_id: str = None,
+    thread_id: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict:
+    """分页返回 LLM 用量明细"""
+    conditions = []
+    params = []
+
+    def add_filter(column: str, value):
+        if value:
+            conditions.append(f"{column} = %s")
+            params.append(value)
+
+    add_filter("org_id", org_id)
+    add_filter("user_id", user_id)
+    add_filter("thread_id", thread_id)
+    if start_date:
+        conditions.append("created_at >= %s")
+        params.append(start_date)
+    if end_date:
+        conditions.append("created_at < %s::timestamp + INTERVAL '1 day'")
+        params.append(end_date)
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    conn = get_conn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as c:
+            c.execute(
+                f"""
+                SELECT COUNT(*) AS total FROM llm_usage {where_clause}
+                """,
+                tuple(params)
+            )
+            total = int(c.fetchone()["total"])
+
+            c.execute(
+                f"""
+                SELECT id, org_id, user_id, thread_id, model, provider,
+                       input_tokens, output_tokens, total_tokens,
+                       cost_usd, cost_cny, created_at
+                FROM llm_usage
+                {where_clause}
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                tuple(params + [limit, offset])
+            )
+            rows = [dict(row) for row in c.fetchall()]
+            return {"total": total, "rows": rows}
+    finally:
+        conn.close()
+
+
+def create_user(
+    user_id: str,
+    name: str,
+    role: str = "成员",
+    entity_type: str = "user",
+    org_id: str = "org_default",
+    team_id: str = None,
+    wechat_user_id: str = None,
+) -> bool:
+    """创建用户，user_id 已存在则返回 False"""
+    conn = get_conn()
+    try:
+        with conn.cursor() as c:
+            c.execute(
+                """
+                INSERT INTO user_profiles
+                (user_id, name, role, entity_type, org_id, team_id, wechat_user_id, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'active')
+                ON CONFLICT (user_id) DO NOTHING
+                """,
+                (user_id, name, role, entity_type, org_id, team_id, wechat_user_id)
+            )
+            conn.commit()
+            return c.rowcount > 0
+    finally:
+        conn.close()
+
+
+def update_user(
+    user_id: str,
+    name: str = None,
+    role: str = None,
+    org_id: str = None,
+    team_id: str = None,
+    wechat_user_id: str = None,
+    status: str = None,
+) -> bool:
+    """更新用户信息，只更新非 None 字段"""
+    fields = []
+    values = []
+    if name is not None:
+        fields.append("name = %s")
+        values.append(name)
+    if role is not None:
+        fields.append("role = %s")
+        values.append(role)
+    if org_id is not None:
+        fields.append("org_id = %s")
+        values.append(org_id)
+    if team_id is not None:
+        fields.append("team_id = %s")
+        values.append(team_id)
+    if wechat_user_id is not None:
+        fields.append("wechat_user_id = %s")
+        values.append(wechat_user_id)
+    if status is not None:
+        fields.append("status = %s")
+        values.append(status)
+    if not fields:
+        return False
+
+    fields.append("updated_at = CURRENT_TIMESTAMP")
+    values.append(user_id)
+
+    conn = get_conn()
+    try:
+        with conn.cursor() as c:
+            c.execute(
+                f"UPDATE user_profiles SET {', '.join(fields)} WHERE user_id = %s",
+                tuple(values)
+            )
+            conn.commit()
+            return c.rowcount > 0
+    finally:
+        conn.close()
+
+
+def get_user_full(user_id: str) -> Optional[dict]:
+    """获取用户完整信息，包含组织名"""
+    conn = get_conn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as c:
+            c.execute(
+                """
+                SELECT u.user_id, u.name, u.role, u.entity_type, u.org_id,
+                       u.team_id, u.wechat_user_id, u.status, u.created_at, u.updated_at,
+                       o.name AS org_name
+                FROM user_profiles u
+                LEFT JOIN organizations o ON o.org_id = u.org_id
+                WHERE u.user_id = %s
+                """,
+                (user_id,)
+            )
+            row = c.fetchone()
+            return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def list_users_full(active_only: bool = False) -> List[dict]:
+    """返回用户管理列表"""
+    conn = get_conn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as c:
+            where = "WHERE u.status = 'active'" if active_only else ""
+            c.execute(
+                f"""
+                SELECT u.user_id, u.name, u.role, u.entity_type, u.org_id,
+                       u.team_id, u.wechat_user_id, u.status, u.created_at, u.updated_at,
+                       o.name AS org_name
+                FROM user_profiles u
+                LEFT JOIN organizations o ON o.org_id = u.org_id
+                {where}
+                ORDER BY u.created_at DESC
+                """
+            )
+            return c.fetchall()
+    finally:
+        conn.close()
+
+
+def deactivate_user(user_id: str) -> bool:
+    return update_user(user_id, status="disabled")
+
+
+def reactivate_user(user_id: str) -> bool:
+    return update_user(user_id, status="active")
+
+
+def ensure_user_exists(
+    user_id: str,
+    name: str = None,
+    org_id: str = "org_default",
+) -> bool:
+    """确保用户存在，不存在则创建占位用户"""
+    if get_user_full(user_id):
+        return False
+    return create_user(
+        user_id=user_id,
+        name=name or user_id,
+        role="成员",
+        entity_type="user",
+        org_id=org_id,
+    )
 
 
 def get_episodes(user_id: str, limit: int = 20) -> List[dict]:

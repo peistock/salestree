@@ -98,7 +98,8 @@ cp .env.example .env
 | `MODEL_DAILY` / `MODEL_COMPLEX` / `MODEL_SUMMARY` | 默认 `qwen/qwen3.6-35b-a3b`（LM Studio） |
 | `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | 默认 localhost:5432，与 docker-compose.yml 一致 |
 | `SEARXNG_URL` | SearXNG 地址，本地 `http://127.0.0.1:8080`，服务器部署可指向 `https://searxng.peistock.win` |
-| `ADMIN_API_KEY` | **新增**：访问 `/api/admin/*` 用量与配额接口的认证密钥 |
+| `ADMIN_API_KEY` | **新增**：访问 `/api/admin/*` 用量、配额、用户管理接口的认证密钥 |
+| `REQUIRE_KNOWN_USERS` | **新增**：`true` 时只允许已知活跃用户连接 WS；默认 `false` 自动创建占位用户 |
 
 > `.env` 必须独立传输或重新填写，**不能通过压缩包传播**。
 
@@ -144,6 +145,15 @@ streamlit run dashboard.py --server.port 8501
 - Cloudflare Tunnel：`cloudflared tunnel run salesmind`
 - 企微后台 URL：`https://wechat.peistock.win/wechat`
 - Token / EncodingAESKey 与 `.env` 一致
+
+### 7. 启动管理后台
+
+```bash
+streamlit run dashboard.py --server.port 8501
+```
+
+浏览器访问 `http://localhost:8501`，密码为 `.env` 中的 `DASHBOARD_PASSWORD`（未配置则直接进入）。
+后台新增「LLM 用量」和「用户管理」tab，可查看用量、修改配额、创建/编辑/禁用用户。
 
 ---
 

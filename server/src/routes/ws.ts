@@ -5,6 +5,8 @@ import { resolveUploadPath } from "../utils/fileStorage.ts";
 import { AgentSession, type OutgoingMessage } from "../agent/Session.ts";
 import { ConversationStore } from "../memory/ConversationStore.ts";
 import { UsageStore } from "../db/usageStore.ts";
+import { UserStore } from "../db/userStore.ts";
+import { config } from "../config.ts";
 
 interface AttachmentMeta {
   name: string;
@@ -29,6 +31,7 @@ interface HistoryMessage {
 const activeSessions = new Map<string, AgentSession>();
 const conversationStore = new ConversationStore();
 const usageStore = new UsageStore();
+const userStore = new UserStore();
 
 const DEDUP_TTL_MS = 60_000;
 const dedupCache = new Map<string, number>();
@@ -73,6 +76,20 @@ export async function wsChatRoutes(app: FastifyInstance) {
       }
 
       const userId = data.user_id?.trim() || "web_user";
+
+      // 用户存在性校验
+      if (config.requireKnownUsers) {
+        const existing = await userStore.getUser(userId);
+        if (!existing || existing.status !== "active") {
+          send({ type: "error", message: "用户不存在或已被禁用，请联系管理员。" });
+          return;
+        }
+      } else {
+        // 默认自动创建占位用户，避免幽灵账号
+        await userStore.ensureUserExists(userId, userId).catch((err) => {
+          console.error("[ws] 确保用户存在失败:", err);
+        });
+      }
 
       if (data.action === "stop") {
         activeSessions.get(userId)?.abort();

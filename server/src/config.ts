@@ -43,4 +43,5 @@ export const config = {
   admin: {
     apiKey: process.env.ADMIN_API_KEY ?? "",
   },
+  requireKnownUsers: process.env.REQUIRE_KNOWN_USERS === "true",
 };
