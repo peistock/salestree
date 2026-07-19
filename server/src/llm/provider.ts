@@ -279,6 +279,12 @@ function openAiStreamingStreamFn(
       output.push({ type: "start", partial: buildPartial() });
 
       for await (const chunk of response as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>) {
+        // OpenAI 流式接口常把 usage 放在 choices 为空的最终 chunk 里，必须先捕获
+        if (chunk.usage) {
+          inputTokens = chunk.usage.prompt_tokens ?? inputTokens;
+          outputTokens = chunk.usage.completion_tokens ?? outputTokens;
+        }
+
         const choice = chunk.choices[0];
         if (!choice) continue;
 
@@ -295,11 +301,6 @@ function openAiStreamingStreamFn(
 
         if (choice.finish_reason) {
           finishReason = choice.finish_reason;
-        }
-
-        if (chunk.usage) {
-          inputTokens = chunk.usage.prompt_tokens ?? inputTokens;
-          outputTokens = chunk.usage.completion_tokens ?? outputTokens;
         }
 
         if (delta.content) {
