@@ -270,6 +270,7 @@ Agent 收到后，立即在下一次交互中优先关切该客户疑虑。
 | 世界域 | 浏览器自动化 | CDP Proxy（localhost:3456）+ 独立 Chrome（端口 9222） | 动态渲染、登录态、交互操作（点击/填表/截图/滚动）；**启动**：`chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile`；请求需传 proxies=None 绕过 HTTP_PROXY |
 | 世界域 | Chrome 资源检索 | find-url.mjs | 搜本地 Chrome 书签/历史，定位内部系统和之前访问过的页面 |
 | 世界域 | 股票数据查询 | peistock HTTP API (localhost:3457) | 查询股票指标、信号、扫描结果（端口与 CDP Proxy 错开） |
+| 创作域 | HTML 方案在线编辑 | HTML-Editor（嵌入 `server/public/html-editor/`，MIT 协议） | Agent 生成的 HTML 方案可在浏览器直接编辑文字/样式并保存回 `data/uploads/`，无需反复回 chat 提需求 |
 | 创作域 | Markdown 转 PDF | fpdf2 + 系统字体自动检测 | 生成带封面的中文 PDF 报告 |
 | 智能层 | 日常 LLM | **LM Studio 本地 qwen/qwen3.6-35b-a3b**（端口 1234） | 本地运行，零 API 费用，日常任务稳定；temperature=0.3 + 铁律提示词确保 tool calling 可靠性 |
 | 智能层 | 复杂 LLM | **LM Studio 本地 qwen/qwen3.6-35b-a3b** | 同上 |

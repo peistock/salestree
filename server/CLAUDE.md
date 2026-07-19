@@ -40,12 +40,16 @@ server/
 │   │   ├── health.ts
 │   │   ├── ws.ts          # WebSocket /ws/chat
 │   │   ├── upload.ts      # POST /api/upload 文件上传
+│   │   ├── editorSave.ts  # POST /api/editor/save HTML 编辑器保存
 │   │   ├── wechatKb.ts    # /wechat_kb 资讯看板页面与静态资源
 │   │   ├── companyLeads.ts# /api/wechat_kb/company_leads 线索聚合（公司视角）
 │   │   └── policy.ts      # /api/sales_policies 销售政策看板（飞书表格同步）
 │   └── utils/
 │       ├── logger.ts
 │       └── fileStorage.ts # 上传文件保存、URL 映射、文件名安全化
+├── public/
+│   ├── chat.html          # Web 聊天主页面
+│   └── html-editor/       # HTML-Editor 静态文件（MIT 协议）
 ├── scripts/
 │   └── spike.ts           # 本地验证脚本
 └── dist/                  # tsc 编译输出（gitignore）
@@ -79,6 +83,14 @@ server/
 - 上传后返回 `{ name, url, mimeType, size }`，`url` 为 `/data/uploads/...`，由 `/data` 静态资源挂载直接服务。
 - WebSocket `/ws/chat` 消息支持 `attachments` 字段；图片作为 `image_url` 进入 LLM prompt，文档以文件名+链接进入文本 prompt。
 - Agent 通过 `read_file`（文本/HTML/JSON/CSV 等）和 `read_document`（Word/Excel/PPT/PDF）工具读取文档内容；系统 prompt 要求用户上传文档后必须调用对应工具，不得以"无法读取本地文件"为由拒绝。
+
+## HTML 在线编辑
+
+- 在 `public/html-editor/` 下嵌入 [HTML-Editor](https://github.com/yuzycheng/HTML-Editor)（MIT 协议），用于编辑 Agent 生成的 HTML 方案。
+- 访问路径：`/html-editor/room.html?file=/data/uploads/...&embed=1`
+- `src/room.js` 从 `?file=` 参数加载 HTML，`src/collab.js` 在 embed 模式下走本地 Yjs，不连接 PartyKit。
+- `POST /api/editor/save` 接收 `{ url, html }`，校验路径必须在 `/data/uploads/` 下，覆盖写入原文件。
+- `public/chat.html` 对 HTML 文件显示 ✏️ 编辑按钮，点击在新标签页打开编辑器。
 
 ## 资讯看板
 

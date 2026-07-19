@@ -21,7 +21,8 @@
 - [x] DuckDB 分析层（agent_turns / task_assets / execution_summary / agent_learnings）
 - [x] Web 聊天界面（`/chat`）四栏布局：协作看板 / 资讯看板 / 项目看板 / 销售政策看板
 - [x] 销售政策看板：对接飞书表格，实时同步媒体端口返点政策与折扣控制线
-- [x] TypeScript 新服务端（`server/`）：Fastify + Pi Agent，承载 `/chat`、对话持久化、任务历史
+- [x] TypeScript 新服务端（`server/`）：Fastify + Pi Agent，承载 `/chat`、对话持久化、任务历史、文件上传与 HTML 在线编辑
+- [x] HTML 在线编辑器：基于 HTML-Editor，生成方案后可直接在浏览器编辑并保存回 `data/uploads/`
 - [x] Streamlit 管理后台（`dashboard.py`）
 
 ## 项目结构
@@ -71,7 +72,15 @@ salestree/
 │       ├── index.ts          # Fastify 启动入口
 │       ├── routes/ws.ts      # WebSocket /ws/chat
 │       ├── routes/chat.ts    # /chat 页面路由
+│       ├── routes/upload.ts  # 文件上传
+│       ├── routes/editorSave.ts  # HTML 编辑器保存
 │       └── memory/           # 对话持久化
+│   └── public/html-editor/   # HTML-Editor 静态文件
+├── data/                  # 业务数据与配置
+│   ├── skills/               # Agent Skill 定义（markdown）
+│   ├── templates/            # 方案生成模板（如投流方法论 HTML 片段）
+│   ├── assets/               # 静态资源
+│   └── uploads/              # 上传/生成的客户文件（**不进 git**）
 ├── third_party/wechat-digest-skill/   # 资讯工作台（公众号文章 + 知识库 + 线索库）
 │   ├── kb.py
 │   ├── extract_leads_kb.py
