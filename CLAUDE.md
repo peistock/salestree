@@ -26,7 +26,7 @@ type: project
 | **Mac/混合部署** | 主服务可运行在本地 Mac 或云服务器；SearXNG 默认保留在本地网络 | 本地断网时搜索降级为浏览器百度搜索 fallback |
 | **混合部署** | 服务器运行销销主应用（FastAPI + PostgreSQL + 云/本地 LLM）；SearXNG 可保留本地 Mac，通过 Cloudflare Tunnel `searxng.peistock.win` 暴露 | 云端机房 IP 易被搜索引擎反爬虫拦截；本地网络断网时搜索降级为 Chrome 百度搜索 fallback。`.env` 中 `SEARXNG_URL` 控制指向本地还是远程域名 |
 | **本地 LLM 为主** | 核心智能依赖 **LM Studio 本地 qwen/qwen3.6-35b-a3b**（端口 1234）；DeepSeek v4-flash / 百炼 qwen3.6-plus 作为 API 备选，通过 `LLM_FALLBACK_*` 环境变量配置后自动故障转移 | 本地 35B 模型日常任务稳定，复杂任务（万字报告）输出质量可达 ~3500 字；API 费用 ¥0/月；thinking mode 不可用 |
-| **Docker PostgreSQL** | PG 容器通过端口映射暴露 localhost:5432 | 本地其他 PostgreSQL 实例（如 pg0）可能抢占 5432 端口，导致销销连接到错误数据库并报密码认证失败。启动前必须检查 `lsof -i :5432` |
+| **Docker PostgreSQL** | PG 容器通过端口映射暴露 localhost:**5433**（避免与本地其他 PG 冲突） | 如果 `.env` 中 `DB_PORT` 与 `docker-compose.yml` 映射不一致，销销会连错数据库并报密码认证失败。启动前必须检查 `lsof -i :5433` |
 | **本地隐私优先** | 客户沟通记录、报价等敏感数据本地处理；上下文压缩走本地 Gemma 4 26B | 本地模型能力持续升级，处理速度和质量可接受 |
 | **销售主动录入** | 客户/联系人/商机由销售手动维护，非自动 CRM 同步 | 数据更新摩擦高，长期可能因懒惰而数据过时 |
 

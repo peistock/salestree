@@ -5,7 +5,7 @@
 销销（SalesMind / Xiaoxiaoshu）是一个面向互联网广告/营销公司销售团队的 AI 协作助手。
 - 主服务：TypeScript Fastify（`server/`，端口 8001，由 `server/.env` 中 `PORT` 控制）
 - 遗留服务：Python FastAPI（`main.py`，端口 8000/8001，可选）
-- 数据库：PostgreSQL 15 + PGVector（Docker 本地运行，端口 5432）
+- 数据库：PostgreSQL 15 + PGVector（Docker 本地运行，主机端口 5433，容器内 5432）
 - 本地 LLM：LM Studio（默认端口 1234）
 - 管理后台：Streamlit（端口 8501）
 
@@ -96,7 +96,7 @@ cp .env.example .env
 |-----------|------|
 | `LLM_BASE_URL` / `LLM_API_KEY` | 默认 LM Studio 本地 `http://127.0.0.1:1234/v1` + `lm-studio`；也可切换 DeepSeek / 百炼 |
 | `MODEL_DAILY` / `MODEL_COMPLEX` / `MODEL_SUMMARY` | 默认 `qwen/qwen3.6-35b-a3b`（LM Studio） |
-| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | 默认 localhost:5432，与 docker-compose.yml 一致 |
+| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | 默认 localhost:**5433**，与 `docker-compose.yml` 中 `5433:5432` 映射一致 |
 | `SEARXNG_URL` | SearXNG 地址，本地 `http://127.0.0.1:8080`，服务器部署可指向 `https://searxng.peistock.win` |
 | `ADMIN_API_KEY` | **新增**：访问 `/api/admin/*` 用量、配额、用户管理接口的认证密钥 |
 | `REQUIRE_KNOWN_USERS` | **新增**：`true` 时只允许已知活跃用户连接 WS；默认 `false` 自动创建占位用户 |
@@ -109,10 +109,10 @@ cp .env.example .env
 docker-compose up -d db
 ```
 
-启动前检查 5432 端口是否被占用：
+启动前检查 5433 端口是否被占用：
 
 ```bash
-lsof -i :5432
+lsof -i :5433
 ```
 
 如果有非 Docker 的 PostgreSQL 进程，先停止，否则销销会连错数据库。
@@ -140,20 +140,14 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 8001
 streamlit run dashboard.py --server.port 8501
 ```
 
+浏览器访问 `http://localhost:8501`，密码为 `.env` 中的 `DASHBOARD_PASSWORD`（未配置则直接进入）。
+后台新增「LLM 用量」和「用户管理」tab，可查看用量、修改配额、创建/编辑/禁用用户。
+
 ### 7. 配置企微回调（如需完整功能）
 
 - Cloudflare Tunnel：`cloudflared tunnel run salesmind`
 - 企微后台 URL：`https://wechat.peistock.win/wechat`
 - Token / EncodingAESKey 与 `.env` 一致
-
-### 8. 启动管理后台
-
-```bash
-streamlit run dashboard.py --server.port 8501
-```
-
-浏览器访问 `http://localhost:8501`，密码为 `.env` 中的 `DASHBOARD_PASSWORD`（未配置则直接进入）。
-后台新增「LLM 用量」和「用户管理」tab，可查看用量、修改配额、创建/编辑/禁用用户。
 
 ---
 
@@ -201,4 +195,4 @@ Claude Code 会自动读取 `CLAUDE.md` 和 `README.md` 获取项目上下文。
 
 ---
 
-*更新日期：2026-07-19*
+*更新日期：2026-07-20*

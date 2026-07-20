@@ -119,6 +119,7 @@ server/
   - `POST /api/admin/users`
   - `PATCH /api/admin/users/:user_id`
   - `POST /api/admin/users/:user_id/deactivate`
+- 前端用户列表：`GET /api/users` 返回 `user_profiles` 中的活跃用户，供 `public/chat.html` 左上角用户切换菜单使用。
 - 当前没有真正的用户鉴权，`user_id` 由客户端自声明；配额拦截是“尽力而为”，等后续接入真实认证后再补强。
 
 ## 资讯看板

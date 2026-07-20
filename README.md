@@ -28,6 +28,7 @@
 - [x] Admin API：`/api/admin/usage`、`/api/admin/usage/summary`、`/api/admin/orgs`、配额修改、用户 CRUD
 - [x] Streamlit 管理后台（`dashboard.py`）：含 LLM 用量看板 + 用户管理
 - [x] WebSocket 幽灵用户处理：默认自动创建占位用户，可选 `REQUIRE_KNOWN_USERS=true` 严格校验
+- [x] 前端用户列表接口：`GET /api/users` 从 `user_profiles` 读取活跃用户，与 Dashboard 用户管理同源
 
 ## 项目结构
 
@@ -128,10 +129,10 @@ cp .env.example .env
 docker-compose up -d db
 ```
 
-启动前确认 5432 端口未被其他 PostgreSQL 实例占用：
+启动前确认 5433 端口未被其他进程占用（`docker-compose.yml` 当前把 PG 映射到主机 5433 端口，避免与本地其他 PostgreSQL 实例冲突）：
 
 ```bash
-lsof -i :5432
+lsof -i :5433
 ```
 
 ### 4. 启动销销（Web 服务）
