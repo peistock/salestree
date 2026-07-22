@@ -3,12 +3,30 @@ name: guizang-html-deck
 description: 调用 data/skills/guizang-ppt-skill 生成高质感横向翻页网页 PPT（单 HTML 文件）。提供两种视觉系统：① 电子杂志 × 电子墨水风（衬线、WebGL 流体背景、暖色）；② 瑞士国际主义风（无衬线、网格、高饱和锚点色）。适合分享、演讲、发布会、demo day 等场景。
 triggers:
   - guizang
-  - 杂志风
-  - 瑞士风
+  - 做ppt
+  - 做PPT
+  - 生成PPT
+  - 生成ppt
+  - PPT
+  - ppt
+  - 幻灯片
+  - 演示文稿
+  - deck
+  - presentation
+  - slides
   - 网页ppt
+  - 网页PPT
+  - 网页幻灯片
   - html deck
+  - html ppt
+  - 演讲稿
+  - 发布会
+  - keynote
+  - 路演
   - 横向翻页
   - 电子杂志
+  - 杂志风
+  - 瑞士风
   - swiss style
 ---
 
@@ -46,6 +64,7 @@ triggers:
    - 复制对应 `assets/template.html` 或 `assets/template-swiss.html`
    - 替换 `:root` 主题色、标题、slide 内容
    - 严格使用 template 中预定义的 class，不发明新类名
+   - **动画属性 `data-anim` 必须放在 slide 内部的子元素上**（如标题、段落、卡片），**绝不能直接写在 `<section class="slide">` 上**；`revealSlide()` 通过 `slide.querySelectorAll('[data-anim]')` 查找后代元素，不会命中 slide 自身，若写在 section 上会导致整页透明度为 0 而显示空白
    - 产出**单文件 HTML**（CSS/JS 可内联或引用本地 assets）
 
 4. **保存与交付**：

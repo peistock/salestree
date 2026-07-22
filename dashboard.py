@@ -13,9 +13,12 @@
 """
 import os
 import sys
+import uuid
 from datetime import date, datetime
 from pathlib import Path
 
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -66,29 +69,28 @@ st.markdown(
     @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Noto+Serif+SC:wght@200..900&display=swap');
 
     :root {
-      --paper: #f4efe4 !important;
-      --paper-2: #efe8d8 !important;
-      --card: #fbf8f0 !important;
-      --ink: #1c1813 !important;
-      --ink-2: #4a4239 !important;
-      --ink-3: #7a6f5e !important;
-      --line: #d9cfb8 !important;
+      --paper: #0d0d0d !important;
+      --paper-2: #1a1a1a !important;
+      --card: #1c1c1e !important;
+      --ink: #ffffff !important;
+      --ink-2: #e5e5e7 !important;
+      --ink-3: #8e8e93 !important;
+      --line: #38383a !important;
       --vermilion: #d8401f !important;
       --vermilion-d: #b8311a !important;
-      --moss: #41684e !important;
-      --gold: #a9762a !important;
+      --moss: #34c759 !important;
+      --gold: #ffcc00 !important;
     }
 
     html, body, .stApp, [data-testid="stAppViewContainer"] {
       background-color: var(--paper) !important;
       color: var(--ink) !important;
-      font-family: 'Noto Serif SC', 'Fraunces', serif !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
     }
 
     h1, h2, h3, h4, h5, h6,
     .stMarkdown h1, .stMarkdown h2, .stMarkdown h3,
     [data-testid="stHeading"] h1, [data-testid="stHeading"] h2, [data-testid="stHeading"] h3 {
-      font-family: 'Fraunces', 'Noto Serif SC', serif !important;
       color: var(--ink) !important;
       letter-spacing: -0.02em !important;
     }
@@ -114,10 +116,9 @@ st.markdown(
     button, .stButton>button, [data-testid="stButton"]>button,
     [data-testid="baseButton-primary"], [data-testid="baseButton-secondary"] {
       background-color: var(--vermilion) !important;
-      color: var(--card) !important;
+      color: #ffffff !important;
       border: 1px solid var(--vermilion-d) !important;
       border-radius: 6px !important;
-      font-family: 'Noto Serif SC', serif !important;
       font-weight: 500 !important;
     }
 
@@ -138,7 +139,6 @@ st.markdown(
       color: var(--ink) !important;
       border: 1px solid var(--line) !important;
       border-radius: 6px !important;
-      font-family: 'Noto Serif SC', serif !important;
     }
 
     [data-testid="stExpander"],
@@ -157,7 +157,6 @@ st.markdown(
 
     [data-testid="stMetric"] [data-testid="stMetricValue"] {
       color: var(--vermilion) !important;
-      font-family: 'Fraunces', 'Noto Serif SC', serif !important;
     }
 
     [data-testid="stMetric"] [data-testid="stMetricLabel"] {
@@ -169,7 +168,6 @@ st.markdown(
     }
 
     code, pre, .monospace {
-      font-family: 'IBM Plex Mono', monospace !important;
       background-color: var(--paper-2) !important;
       color: var(--ink) !important;
     }
@@ -180,7 +178,7 @@ st.markdown(
     }
 
     a:hover {
-      color: var(--vermilion-d) !important;
+      color: #ff6b4f !important;
       text-decoration: underline !important;
     }
 
@@ -274,6 +272,26 @@ st.sidebar.image(LOGO_PATH, width=60)
 st.sidebar.caption("销售智能协作空间 — 管理界面")
 st.sidebar.divider()
 
+# 当前操作者
+st.sidebar.subheader("🔑 当前操作者")
+operator_options = {u["user_id"]: f"{u['name']}（{u['user_id']}）" for u in users}
+if "operator_id" not in st.session_state or st.session_state.operator_id not in operator_options:
+    # 默认固定为陈沛（sales_001），不存在则取第一个
+    st.session_state.operator_id = "sales_001" if "sales_001" in operator_options else next(iter(operator_options.keys()), None)
+selected_operator = st.sidebar.selectbox(
+    "选择身份",
+    options=list(operator_options.keys()),
+    format_func=lambda x: operator_options.get(x, x),
+    index=list(operator_options.keys()).index(st.session_state.operator_id) if st.session_state.operator_id in operator_options else 0,
+    label_visibility="collapsed",
+)
+st.session_state.operator_id = selected_operator
+operator = get_user_full(selected_operator) if selected_operator else None
+is_operator_admin = operator.get("is_admin") if operator else False
+st.sidebar.caption(f"权限：{'管理员' if is_operator_admin else '成员'}")
+
+st.sidebar.divider()
+
 # 销售人员
 st.sidebar.subheader("销售人员")
 for m in users:
@@ -301,7 +319,7 @@ with col1:
 with col2:
     st.title("销销 外挂大脑")
 
-tabs = st.tabs(["📝 今日托付", "📰 晚间简报", "🚨 紧急插话", "🔍 记忆透明", "🏢 客户与商机", "📤 文档上传", "📈 LLM 用量", "👥 用户管理"])
+tabs = st.tabs(["📝 今日托付", "📰 晚间简报", "🚨 紧急插话", "🔍 记忆透明", "🏢 客户与商机", "📤 文档上传", "📈 LLM 用量", "⚙️ LLM 配置"] + (["👥 用户管理"] if is_operator_admin else []))
 
 # ---------- 今日托付 ----------
 with tabs[0]:
@@ -521,11 +539,55 @@ with tabs[4]:
     if not accounts:
         st.info("暂无客户")
     else:
-        account_options = {f"{a['name']}（{a['account_id']}）": a for a in accounts}
+        account_options = {f"{a['name']}（{a['account_id']}）{ ' - ' + (sales_users.get(a['owner_id'], a['owner_id']) if a.get('owner_id') else '未分配') }": a for a in accounts}
         selected_label = st.selectbox("选择客户", options=list(account_options.keys()))
         account = account_options[selected_label]
 
         st.subheader("客户详情")
+
+        col_del, col_edit, col_spacer = st.columns([0.15, 0.15, 0.7])
+        with col_del:
+            if st.button("🗑️ 删除客户", key=f"del_acc_{account['account_id']}", type="primary"):
+                if m.delete_account(account["account_id"]):
+                    st.success("已删除客户")
+                    st.rerun()
+                else:
+                    st.error("删除失败")
+        with col_edit:
+            with st.popover("✏️ 编辑客户"):
+                with st.form(f"edit_account_{account['account_id']}"):
+                    edit_acc_name = st.text_input("公司名", value=account.get("name", ""))
+                    edit_acc_industry = st.text_input("行业", value=account.get("industry") or "")
+                    edit_acc_stage = st.selectbox(
+                        "阶段",
+                        ["prospect", "qualified", "proposal", "negotiation", "closed-won", "closed-lost"],
+                        index=["prospect", "qualified", "proposal", "negotiation", "closed-won", "closed-lost"].index(account.get("stage", "prospect")) if account.get("stage") in ["prospect", "qualified", "proposal", "negotiation", "closed-won", "closed-lost"] else 0,
+                    )
+                    edit_acc_region = st.text_input("地区", value=account.get("region") or "")
+                    edit_acc_owner = st.selectbox(
+                        "归属销售",
+                        options=list(sales_users.keys()),
+                        format_func=lambda x: sales_users.get(x, x),
+                        index=list(sales_users.keys()).index(account["owner_id"]) if account.get("owner_id") in sales_users else 0,
+                    ) if sales_users else st.text_input("归属销售 ID", value=account.get("owner_id") or "")
+                    edit_acc_notes = st.text_area("备注", value=account.get("notes") or "")
+                    edit_submitted = st.form_submit_button("保存修改")
+                    if edit_submitted:
+                        owner = edit_acc_owner if isinstance(edit_acc_owner, str) else edit_acc_owner
+                        if m.update_account(
+                            account["account_id"],
+                            name=edit_acc_name.strip(),
+                            industry=edit_acc_industry.strip() or None,
+                            stage=edit_acc_stage,
+                            region=edit_acc_region.strip() or None,
+                            owner_id=owner or None,
+                            notes=edit_acc_notes.strip() or None,
+                        ):
+                            st.success("已更新客户")
+                            st.rerun()
+                        else:
+                            st.error("更新失败")
+
         st.json(account)
 
         col1, col2 = st.columns(2)
@@ -657,7 +719,7 @@ with tabs[5]:
 # ---------- LLM 用量 ----------
 with tabs[6]:
     st.header("📈 LLM 用量")
-    st.caption("按组织、用户、时间维度查看 LLM token 消耗与成本")
+    st.caption("按组织、用户、时间维度查看 LLM token 消耗")
 
     try:
         orgs = list_organizations()
@@ -695,7 +757,7 @@ with tabs[6]:
         summary = summarize_llm_usage(**filters)
 
         # 指标卡
-        m1, m2, m3, m4, m5 = st.columns(5)
+        m1, m2, m3, m4 = st.columns(4)
         with m1:
             st.metric("请求数", summary["count"])
         with m2:
@@ -704,8 +766,6 @@ with tabs[6]:
             st.metric("Input", f"{summary['input_tokens']:,}")
         with m4:
             st.metric("Output", f"{summary['output_tokens']:,}")
-        with m5:
-            st.metric("成本 USD", f"${summary['cost_usd']:.4f}")
 
         # 组织配额进度
         if selected_org:
@@ -737,8 +797,6 @@ with tabs[6]:
                     "Input Tokens": int(m["input_tokens"]),
                     "Output Tokens": int(m["output_tokens"]),
                     "总 Tokens": int(m["total_tokens"]),
-                    "成本 USD": float(m["cost_usd"]),
-                    "成本 CNY": float(m["cost_cny"]),
                 })
             st.dataframe(model_df_data, use_container_width=True)
 
@@ -761,7 +819,6 @@ with tabs[6]:
                     "Input": int(r["input_tokens"]),
                     "Output": int(r["output_tokens"]),
                     "Total": int(r["total_tokens"]),
-                    "USD": float(r["cost_usd"]),
                 })
             st.dataframe(detail_data, use_container_width=True)
             st.caption(f"共 {detail['total']} 条，当前展示前 100 条")
@@ -770,87 +827,197 @@ with tabs[6]:
     except Exception as e:
         st.error(f"加载用量数据失败: {e}")
 
-# ---------- 用户管理 ----------
+# ---------- LLM 配置 ----------
 with tabs[7]:
-    st.header("👥 用户管理")
-    st.caption("创建、编辑、禁用用户，并分配组织")
+    st.header("⚙️ LLM 配置")
+    st.caption("只配置你跟销销对话用的大模型；资讯分析等公共功能仍走全局默认配置")
+
+    def _mask_key(k: str) -> str:
+        if not k or len(k) <= 8:
+            return k or "未设置"
+        return k[:4] + "****" + k[-4:]
+
+    _LLM_DEFAULTS = {
+        "kimi": {"baseUrl": "https://api.kimi.com/coding/v1", "model": "k2.6"},
+        "deepseek": {"baseUrl": "https://api.deepseek.com/v1", "model": "deepseek-v4-flash"},
+        "agnes": {"baseUrl": "https://apihub.agnes-ai.com/v1", "model": "agnes-2.0-flash"},
+        "custom": {"baseUrl": "", "model": ""},
+    }
 
     try:
-        orgs = list_organizations()
-        org_options = {o["org_id"]: f"{o['name']}（{o['org_id']}）" for o in orgs}
+        # 可选用户：管理员可改任何人，成员只能改自己
+        if is_operator_admin:
+            llm_user_options = [(u["user_id"], f"{u['name']}（{u['user_id']}）") for u in users]
+            llm_user_id = st.selectbox(
+                "选择要配置的用户",
+                options=[x[0] for x in llm_user_options],
+                format_func=lambda x: next((l[1] for l in llm_user_options if l[0] == x), x),
+                key="llm_user_select",
+            )
+        else:
+            llm_user_id = selected_operator
+            st.write(f"当前用户：**{operator.get('name') if operator else llm_user_id}**")
 
-        # 新建用户
-        with st.expander("➕ 新建用户"):
-            with st.form("create_user"):
-                new_user_id = st.text_input("用户 ID（留空自动生成）", placeholder="例如 sales_003")
-                new_name = st.text_input("姓名 *")
-                new_role = st.text_input("角色", value="成员")
-                new_entity = st.selectbox("类型", ["sales", "user"], index=0)
-                new_org = st.selectbox("组织", options=list(org_options.keys()), format_func=lambda x: org_options.get(x, x))
-                new_team = st.text_input("团队 ID（可选）")
-                new_wechat = st.text_input("企微 ID（可选）")
-                submitted = st.form_submit_button("创建用户")
-                if submitted:
-                    if not new_name.strip():
-                        st.error("姓名不能为空")
-                    else:
-                        uid = new_user_id.strip() or f"user_{uuid.uuid4().hex[:8]}"
-                        if create_user(uid, new_name.strip(), new_role, new_entity, new_org, new_team or None, new_wechat or None):
-                            st.success(f"已创建用户：{uid}")
-                            st.rerun()
+        llm_user = get_user_full(llm_user_id) if llm_user_id else None
+        current_cfg = (llm_user.get("llm_config") or {}) if llm_user else {}
+        current_key = current_cfg.get("apiKey", "")
+        key_mask = _mask_key(current_key)
+
+        pkey = f"llm_provider_select_{llm_user_id}"
+        bkey = f"llm_base_url_{llm_user_id}"
+        mkey = f"llm_model_{llm_user_id}"
+
+        current_provider = current_cfg.get("provider", "kimi")
+        if current_provider not in _LLM_DEFAULTS:
+            current_provider = "kimi"
+
+        def _on_provider_change(uid: str):
+            p = st.session_state.get(f"llm_provider_select_{uid}", "kimi")
+            st.session_state[f"llm_base_url_{uid}"] = _LLM_DEFAULTS.get(p, {}).get("baseUrl", "")
+            st.session_state[f"llm_model_{uid}"] = _LLM_DEFAULTS.get(p, {}).get("model", "")
+
+        # 初始化 session_state
+        if bkey not in st.session_state:
+            st.session_state[bkey] = current_cfg.get("baseUrl") or _LLM_DEFAULTS[current_provider]["baseUrl"]
+        if mkey not in st.session_state:
+            st.session_state[mkey] = current_cfg.get("modelDaily") or _LLM_DEFAULTS[current_provider]["model"]
+
+        provider = st.selectbox(
+            "Provider",
+            options=list(_LLM_DEFAULTS.keys()),
+            index=list(_LLM_DEFAULTS.keys()).index(current_provider),
+            key=pkey,
+            on_change=lambda: _on_provider_change(llm_user_id),
+        )
+
+        with st.form(f"llm_config_{llm_user_id}"):
+            use_custom = st.checkbox("启用自定义 LLM 配置", value=bool(current_cfg.get("enabled")))
+            base_url = st.text_input("Base URL", key=bkey)
+            api_key = st.text_input(
+                "API Key",
+                value="",
+                placeholder=f"当前已设置: {key_mask}" if current_key else "留空表示保持当前值；输入新值将覆盖",
+                type="password",
+            )
+            model = st.text_input("对话模型", key=mkey, help="日常对话和复杂任务都用这个模型")
+
+            save_llm = st.form_submit_button("保存配置")
+            if save_llm:
+                final_key = api_key.strip() if api_key.strip() else current_key
+                if use_custom:
+                    new_cfg = {
+                        "enabled": True,
+                        "provider": st.session_state[pkey],
+                        "baseUrl": st.session_state[bkey].strip(),
+                        "apiKey": final_key,
+                        "modelDaily": st.session_state[mkey].strip(),
+                        "modelComplex": st.session_state[mkey].strip(),
+                    }
+                else:
+                    new_cfg = {"enabled": False}
+                if update_user(llm_user_id, llm_config=new_cfg):
+                    st.success("LLM 配置已保存")
+                    st.rerun()
+                else:
+                    st.error("保存失败")
+
+        if current_key:
+            st.caption(f"当前 API Key 末尾：{key_mask}")
+    except Exception as e:
+        st.error(f"加载 LLM 配置失败: {e}")
+
+# ---------- 用户管理 ----------
+if is_operator_admin:
+    with tabs[8]:
+        st.header("👥 用户管理")
+        st.caption("创建、编辑、禁用用户，并分配组织")
+
+        try:
+            orgs = list_organizations()
+            org_options = {o["org_id"]: f"{o['name']}（{o['org_id']}）" for o in orgs}
+
+            # 新建用户
+            with st.expander("➕ 新建用户"):
+                with st.form("create_user"):
+                    new_user_id = st.text_input("用户 ID（留空自动生成）", placeholder="例如 sales_003")
+                    new_name = st.text_input("姓名 *")
+                    new_role = st.text_input("角色", value="成员")
+                    new_entity = st.selectbox("类型", ["sales", "user"], index=0)
+                    new_is_admin = st.checkbox("管理员权限", value=False)
+                    new_org = st.selectbox("组织", options=list(org_options.keys()), format_func=lambda x: org_options.get(x, x))
+                    new_team = st.text_input("团队 ID（可选）")
+                    new_wechat = st.text_input("企微 ID（可选）")
+                    submitted = st.form_submit_button("创建用户")
+                    if submitted:
+                        if not new_name.strip():
+                            st.error("姓名不能为空")
                         else:
-                            st.error("用户 ID 已存在或创建失败")
-
-        # 用户列表
-        users = list_users_full()
-        if users:
-            st.subheader("用户列表")
-            df_data = []
-            for u in users:
-                df_data.append({
-                    "用户 ID": u["user_id"],
-                    "姓名": u["name"],
-                    "角色": u["role"],
-                    "类型": u["entity_type"],
-                    "组织": u.get("org_name") or u.get("org_id") or "-",
-                    "团队": u["team_id"] or "-",
-                    "状态": u["status"],
-                    "创建时间": u["created_at"].strftime("%Y-%m-%d %H:%M") if hasattr(u["created_at"], "strftime") else u["created_at"],
-                })
-            st.dataframe(df_data, use_container_width=True)
-
-            # 编辑/禁用操作
-            st.subheader("编辑用户")
-            edit_uid = st.selectbox("选择用户", options=[u["user_id"] for u in users], format_func=lambda x: f"{next((u['name'] for u in users if u['user_id']==x), x)}（{x}）")
-            if edit_uid:
-                edit_user = get_user_full(edit_uid)
-                if edit_user:
-                    with st.form(f"edit_user_{edit_uid}"):
-                        edit_name = st.text_input("姓名", value=edit_user["name"])
-                        edit_role = st.text_input("角色", value=edit_user["role"])
-                        edit_org = st.selectbox(
-                            "组织",
-                            options=list(org_options.keys()),
-                            format_func=lambda x: org_options.get(x, x),
-                            index=list(org_options.keys()).index(edit_user["org_id"]) if edit_user["org_id"] in org_options else 0,
-                        )
-                        edit_team = st.text_input("团队 ID（可选）", value=edit_user["team_id"] or "")
-                        edit_status = st.selectbox("状态", ["active", "disabled"], index=0 if edit_user["status"] == "active" else 1)
-                        save_submitted = st.form_submit_button("保存修改")
-                        if save_submitted:
-                            if update_user(
-                                edit_uid,
-                                name=edit_name.strip(),
-                                role=edit_role.strip(),
-                                org_id=edit_org,
-                                team_id=edit_team.strip() or None,
-                                status=edit_status,
-                            ):
-                                st.success("已更新")
+                            uid = new_user_id.strip() or f"user_{uuid.uuid4().hex[:8]}"
+                            if create_user(uid, new_name.strip(), new_role, new_entity, new_org, new_team or None, new_wechat or None, new_is_admin):
+                                st.success(f"已创建用户：{uid}")
                                 st.rerun()
                             else:
-                                st.error("更新失败")
-        else:
-            st.info("暂无用户")
-    except Exception as e:
-        st.error(f"加载用户数据失败: {e}")
+                                st.error("用户 ID 已存在或创建失败")
+
+            # 用户列表
+            users = list_users_full()
+            if users:
+                st.subheader("用户列表")
+                df_data = []
+                for u in users:
+                    df_data.append({
+                        "用户 ID": u["user_id"],
+                        "姓名": u["name"],
+                        "角色": u["role"],
+                        "类型": u["entity_type"],
+                        "管理员": "是" if u.get("is_admin") else "否",
+                        "组织": u.get("org_name") or u.get("org_id") or "-",
+                        "团队": u["team_id"] or "-",
+                        "状态": u["status"],
+                        "创建时间": u["created_at"].strftime("%Y-%m-%d %H:%M") if hasattr(u["created_at"], "strftime") else u["created_at"],
+                    })
+                st.dataframe(df_data, use_container_width=True)
+
+                # 编辑/禁用操作
+                st.subheader("编辑用户")
+                edit_uid = st.selectbox("选择用户", options=[u["user_id"] for u in users], format_func=lambda x: f"{next((u['name'] for u in users if u['user_id']==x), x)}（{x}）")
+                if edit_uid:
+                    edit_user = get_user_full(edit_uid)
+                    if edit_user:
+                        with st.form(f"edit_user_{edit_uid}"):
+                            edit_name = st.text_input("姓名", value=edit_user["name"])
+                            edit_role = st.text_input("角色", value=edit_user["role"])
+                            edit_entity = st.selectbox(
+                                "类型",
+                                options=["sales", "user"],
+                                index=0 if edit_user["entity_type"] == "sales" else 1,
+                            )
+                            edit_is_admin = st.checkbox("管理员权限", value=bool(edit_user.get("is_admin")))
+                            edit_org = st.selectbox(
+                                "组织",
+                                options=list(org_options.keys()),
+                                format_func=lambda x: org_options.get(x, x),
+                                index=list(org_options.keys()).index(edit_user["org_id"]) if edit_user["org_id"] in org_options else 0,
+                            )
+                            edit_team = st.text_input("团队 ID（可选）", value=edit_user["team_id"] or "")
+                            edit_status = st.selectbox("状态", ["active", "disabled"], index=0 if edit_user["status"] == "active" else 1)
+                            save_submitted = st.form_submit_button("保存修改")
+                            if save_submitted:
+                                if update_user(
+                                    edit_uid,
+                                    name=edit_name.strip(),
+                                    role=edit_role.strip(),
+                                    entity_type=edit_entity,
+                                    is_admin=edit_is_admin,
+                                    org_id=edit_org,
+                                    team_id=edit_team.strip() or None,
+                                    status=edit_status,
+                                ):
+                                    st.success("已更新")
+                                    st.rerun()
+                                else:
+                                    st.error("更新失败")
+            else:
+                st.info("暂无用户")
+        except Exception as e:
+            st.error(f"加载用户数据失败: {e}")

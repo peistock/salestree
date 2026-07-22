@@ -24,10 +24,10 @@ type: project
 | **单销售团队** | 系统先服务一个销售团队/小代理商，暂不做完整多租户隔离 | 已落地最小组织模型（`organizations` + `user_profiles.org_id`）与 LLM 用量计量，但完整 RBAC/数据隔离仍待后续 |
 | **企微/工作渠道** | 销售人员主要在企业微信或 Web 聊天页使用 | 若团队不用企微，需强化 Web/邮件等替代通道 |
 | **Mac/混合部署** | 主服务可运行在本地 Mac 或云服务器；SearXNG 默认保留在本地网络 | 本地断网时搜索降级为浏览器百度搜索 fallback |
-| **混合部署** | 服务器运行销销主应用（FastAPI + PostgreSQL + 云/本地 LLM）；SearXNG 可保留本地 Mac，通过 Cloudflare Tunnel `searxng.peistock.win` 暴露 | 云端机房 IP 易被搜索引擎反爬虫拦截；本地网络断网时搜索降级为 Chrome 百度搜索 fallback。`.env` 中 `SEARXNG_URL` 控制指向本地还是远程域名 |
-| **本地 LLM 为主** | 核心智能依赖 **LM Studio 本地 qwen/qwen3.6-35b-a3b**（端口 1234）；DeepSeek v4-flash / 百炼 qwen3.6-plus 作为 API 备选，通过 `LLM_FALLBACK_*` 环境变量配置后自动故障转移 | 本地 35B 模型日常任务稳定，复杂任务（万字报告）输出质量可达 ~3500 字；API 费用 ¥0/月；thinking mode 不可用 |
-| **Docker PostgreSQL** | PG 容器通过端口映射暴露 localhost:**5433**（避免与本地其他 PG 冲突） | 如果 `.env` 中 `DB_PORT` 与 `docker-compose.yml` 映射不一致，销销会连错数据库并报密码认证失败。启动前必须检查 `lsof -i :5433` |
-| **本地隐私优先** | 客户沟通记录、报价等敏感数据本地处理；上下文压缩走本地 Gemma 4 26B | 本地模型能力持续升级，处理速度和质量可接受 |
+| **混合部署** | 服务器运行销销主应用（Fastify TS + PostgreSQL + 云端 LLM）；SearXNG 可保留本地 Mac，通过 Cloudflare Tunnel `searxng.peistock.win` 暴露 | 云端机房 IP 易被搜索引擎反爬虫拦截；本地网络断网时搜索降级为 Chrome 百度搜索 fallback。`.env` 中 `SEARXNG_URL` 控制指向本地还是远程域名 |
+| **云端 LLM** | 核心智能依赖 **Kimi k2.6**（`api.kimi.com/coding/v1`，`MODEL_DAILY/COMPLEX/SUMMARY` 均为 k2.6）；Agnes `agnes-2.0-flash` 作为系统级备选，通过 `LLM_FALLBACK_*` 环境变量配置后自动故障转移；每个用户还可在 `user_profiles.llm_config` 中配置自己的 LLM（如 DeepSeek），apiKey 通过 `USER_LLM_ENCRYPTION_KEY` 加密 | 并发能力由云 API 承担，多人同时使用无本地推理瓶颈；成本按 token 走云端账单，由 `llm_usage` 计量；API 账号限流（RPM/并发配额）是主要容量约束；`USER_LLM_ENCRYPTION_KEY` 若与 dashboard 侧不一致，会导致用户自定义 LLM 的 key 无法解密而认证失败 |
+| **Docker PostgreSQL** | 开发机 TS 服务连本地 PostgreSQL（localhost:**5432**，DB `salesmind`，user `cpp`）；`docker-compose.yml` 另有一套容器 PG 映射主机 **5433** | 两套实例并存，`.env` 的 `DB_PORT` 指错会连错库（密码认证失败或数据对不上）。改端口前先 `lsof -i :5432` / `lsof -i :5433` 确认目标实例 |
+| **本地隐私优先** | 客户沟通记录、报价等敏感数据存储在本地 PostgreSQL；LLM 推理已全部上云（Kimi），隐私边界变为"数据本地存、推理走云端" | 对隐私极敏感的场景需评估云端推理的数据出境风险 |
 | **销售主动录入** | 客户/联系人/商机由销售手动维护，非自动 CRM 同步 | 数据更新摩擦高，长期可能因懒惰而数据过时 |
 
 ---
@@ -212,6 +212,16 @@ risk_deps: ["account.churn", "competitor.pricing"]
 
 实现见 `mind/interruption.py`。
 
+### 6.3 共享频道（团队协作，已上线）
+
+一个项目一个共享频道，团队全员可读全量历史、实时同步：
+
+- **@销销 才触发 AI**：人-人讨论不会惊动 AI；被 @ 时销销仅以**项目上下文**作答（频道最近对话 + 项目看板摘要），不读任何成员的个人记忆——频道是公共空间，隐私边界清晰
+- **两类频道**：在管项目（飞书/钉钉/微信客户）自动有频道；也可自建成员制频道，创建者选成员、关联项目，可转让/删除
+- 频道内 `@` 自动补全（销销 + 成员）；项目看板「问销销」直接进入对应频道
+
+技术实现（数据模型、WS 协议、API、串行队列）见 `server/CLAUDE.md` 的「共享频道」章节。
+
 ---
 
 ## 七、管理驾驶舱（Co-Pilot Interface）
@@ -258,7 +268,7 @@ Agent 收到后，立即在下一次交互中优先关切该客户疑虑。
 | 接入层 | 消息通道（主） | 企业微信自建应用 | 官方 API，稳定 |
 | 接入层 | 消息通道（副） | 微信公众号（订阅号，个人主体） | 已接入但功能受限：个人订阅号无客服消息权限（48001），只能被动回复（5s XML），LLM 处理超时无法使用 |
 | 接入层 | Web 聊天页 + 资讯看板 + 政策看板 | **TypeScript Fastify** (`server/`)，WebSocket `/ws/chat` + `public/chat.html`；`/wechat_kb`、公司线索、销售政策看板均已由 TS 服务直接承载 | 销售人员主要工作界面；资讯/政策看板不再依赖 Python 遗留服务 |
-| 接入层 | 遗留 API（可选） | Python FastAPI (`main.py`) | 仅保留作本地开发/调试入口；生产环境只需 TS 服务（端口 8001，`server/.env` 中 `PORT` 可修改）|
+| 接入层 | 遗留 API（可选） | Python FastAPI (`main.py`) | 仅保留作本地开发/调试入口；生产环境只需 TS 服务（端口 8002，`server/.env` 中 `PORT` 可修改）|
 | 接入层 | 公网穿透 | Cloudflare Tunnel | 免费，固定域名 |
 | 语音层 | 格式转换 | FFmpeg | 行业标准 |
 | 语音层 | ASR | mlx-qwen3-asr (Qwen3-ASR-0.6B) | 本地 MLX 加速，中文远优于 whisper |
@@ -274,10 +284,9 @@ Agent 收到后，立即在下一次交互中优先关切该客户疑虑。
 | 世界域 | 股票数据查询 | peistock HTTP API (localhost:3457) | 查询股票指标、信号、扫描结果（端口与 CDP Proxy 错开） |
 | 创作域 | HTML 方案在线编辑 | HTML-Editor（嵌入 `server/public/html-editor/`，MIT 协议） | Agent 生成的 HTML 方案可在浏览器直接编辑文字/样式并保存回 `data/uploads/`，无需反复回 chat 提需求 |
 | 创作域 | Markdown 转 PDF | fpdf2 + 系统字体自动检测 | 生成带封面的中文 PDF 报告 |
-| 智能层 | 日常 LLM | **LM Studio 本地 qwen/qwen3.6-35b-a3b**（端口 1234） | 本地运行，零 API 费用，日常任务稳定；temperature=0.3 + 铁律提示词确保 tool calling 可靠性 |
-| 智能层 | 复杂 LLM | **LM Studio 本地 qwen/qwen3.6-35b-a3b** | 同上 |
-| 智能层 | 备选 LLM | DeepSeek v4-flash / 百炼 qwen3.6-plus / NVIDIA / Kimi | 云端 API，通过 `LLM_FALLBACK_URLS/KEYS` 等环境变量配置后自动故障转移；错误分类按超时/限流/连接/认证分别处理 |
-| 智能层 | 敏感/压缩 LLM | Gemma 4 26B（LM Studio） | 本地，隐私，用于上下文压缩 |
+| 智能层 | 日常/复杂/摘要 LLM | **Kimi k2.6**（`api.kimi.com/coding/v1`） | 云端 API，多人并发无本地推理瓶颈；`MODEL_DAILY/COMPLEX/SUMMARY` 均为 k2.6 |
+| 智能层 | 备选 LLM | Agnes `agnes-2.0-flash`（`apihub.agnes-ai.com/v1`） | 云端 API，通过 `LLM_FALLBACK_URLS/KEYS/NAMES/MODELS` 环境变量配置后自动故障转移；`MODELS` 项必须显式配置，否则 fallback 会复用主模型名导致失败 |
+| 智能层 | 用户自定义 LLM | `user_profiles.llm_config` | 每个用户可配置自己的 provider/baseUrl/apiKey/model；apiKey 通过 `USER_LLM_ENCRYPTION_KEY` 加密，**项目根 `.env` 与 `server/.env` 必须保持一致** |
 | 基础设施 | 后端框架 | **TypeScript Fastify**（`server/`，Web 聊天、对话持久化、资讯看板、项目看板）| TS 层已接管主要 Web 能力；复杂 Agent 逻辑在需要时仍可走 Python 遗留工具代理 |
 | 基础设施 | 部署 | 混合：本地 Python + Docker PostgreSQL | 代码本地跑，PG 容器化 |
 | 基础设施 | 进程守护 | 手动 / launchd（后续配置） | 当前开发阶段手动启动 |
@@ -293,7 +302,7 @@ Agent 收到后，立即在下一次交互中优先关切该客户疑虑。
 - 核心模块单元测试
 - 音频情绪分析
 - 进程守护（launchd / systemd）
-- Coordinator 任务恢复：发送"继续"时应回到原 `x-*` 协调任务（当前待修复）
+- 共享频道深化：@技能名路由、频道历史翻页（超 20 条）、RBAC/真实认证、悬浮聊天组件（wsFloat）代码清理
 
 ---
 
@@ -328,6 +337,4 @@ Claude Code 会自动读取本文件与 `server/CLAUDE.md` 获取上下文。
 
 **下一步指令示例**：
 - "实现客户研究 skill 的多源并行搜索"
-- "把早间销售简报的话术改成更直接的风格"
 - "为管理驾驶舱增加商机漏斗视图"
-- "改进关联引擎，支持语义匹配"

@@ -6,7 +6,7 @@
 
 - [x] 混合部署（本地 Python + Docker PostgreSQL + PGVector）
 - [x] Agent 执行引擎（Tool Calling while 循环，Hermes 模式）
-- [x] 本地 LLM 为主（LM Studio qwen3.6-35b-a3b，端口 1234，零 API 费用；DeepSeek / 百炼为 API 备选）
+- [x] 云端 LLM（Kimi k2.6 为主力，Agnes agnes-2.0-flash 为 fallback，自动故障转移；多人并发无本地推理瓶颈）
 - [x] 意图路由（L1 关键词匹配，简单请求直接回复 vs 复杂请求走 Agent 循环）
 - [x] 客户研究技能（account-research）：输入公司名自动产出带信息来源的 battlecard
 - [x] 跟进文案技能（outreach-drafter）：基于客户动态和联系人角色生成个性化微信/邮件文案
@@ -29,6 +29,8 @@
 - [x] Streamlit 管理后台（`dashboard.py`）：含 LLM 用量看板 + 用户管理
 - [x] WebSocket 幽灵用户处理：默认自动创建占位用户，可选 `REQUIRE_KNOWN_USERS=true` 严格校验
 - [x] 前端用户列表接口：`GET /api/users` 从 `user_profiles` 读取活跃用户，与 Dashboard 用户管理同源
+- [x] 共享频道：在管项目自动有频道，也可自建成员制频道；全员实时同步，`@销销` 触发 AI（仅项目上下文，不读个人记忆），创建者可管理成员/转让/删除
+- [x] 聊天体验：Markdown 渲染（表格/列表）、频道内 `@` 自动补全（销销 + 成员）
 
 ## 项目结构
 
@@ -99,10 +101,9 @@ salestree/
 
 ```bash
 # macOS
-# - Docker Desktop（跑 PostgreSQL）
+# - Docker Desktop（可选，跑 PostgreSQL；也可用本地 PostgreSQL）
 # - Python 3.11+
 # - FFmpeg（brew install ffmpeg）
-# - LM Studio（本地 LLM，默认端口 1234）
 # - cloudflared（固定 Tunnel，可选）
 
 # 克隆项目后进入目录
@@ -112,15 +113,17 @@ cd ~/salestree
 ### 2. 配置环境变量
 
 ```bash
+cd server
 cp .env.example .env
 # 编辑 .env，填入你的真实配置：
-# - LLM_BASE_URL=http://127.0.0.1:1234/v1（主，LM Studio 本地）
-#   或 https://api.deepseek.com（备选）
-#   或 https://dashscope.aliyuncs.com/compatible-mode/v1（备选，百炼）
-# - LLM_API_KEY=lm-studio（LM Studio 本地）或你的 API Key
-# - MODEL_DAILY=qwen/qwen3.6-35b-a3b
-# - MODEL_COMPLEX=qwen/qwen3.6-35b-a3b
-# - MODEL_SUMMARY=qwen/qwen3.6-35b-a3b
+# - LLM_BASE_URL=https://api.kimi.com/coding/v1（主，Kimi 云端）
+# - LLM_API_KEY=你的 Kimi API Key
+# - LLM_FALLBACK_URLS / KEYS / NAMES / MODELS=备选云端 API（当前为 Agnes，MODELS 必须显式配置）
+# - MODEL_DAILY=k2.6
+# - MODEL_COMPLEX=k2.6
+# - MODEL_SUMMARY=k2.6
+# - USER_LLM_ENCRYPTION_KEY=用户自定义 LLM apiKey 加密密钥（与项目根 .env 保持一致）
+# - AGENT_MAX_TOTAL_TOKENS=单次任务 token 上限（复杂 HTML PPT 建议 100000）
 ```
 
 ### 3. 启动 PostgreSQL
@@ -205,13 +208,11 @@ SEARXNG_URL=https://searxng.peistock.win
 
 ## 成本
 
-- 大模型 API：**¥0/月**（LM Studio 本地 qwen3.6-35b-a3b）
+- 大模型 API：按 token 计费（Kimi k2.6 云端，`llm_usage` 表按组织记账）
 - Embedding：**¥0/月**（BGE 本地）
-- 上下文压缩：**¥0/月**（本地 Gemma 4 26B）
-- PostgreSQL：**¥0/月**（Docker 本地运行）
-- **总计：¥0/月**（全部本地运行，无 API 费用）
+- PostgreSQL：**¥0/月**（本地运行）
 
-> 备选：DeepSeek v4-flash / 百炼 qwen3.6-plus 在 `.env` 中切换 `BASE_URL` 即可启用。
+> 用户级自定义 LLM：每个用户可在 `user_profiles.llm_config` 中配置自己的 DeepSeek / Kimi / Agnes 等 provider，apiKey 通过 `USER_LLM_ENCRYPTION_KEY` 加密。
 
 ## Admin API（用量、配额与用户）
 

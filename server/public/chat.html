@@ -315,6 +315,69 @@
             border-bottom-left-radius: 4px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
+        .msg.agent.markdown-body { white-space: normal; }
+        .msg.other-user {
+            align-self: flex-start;
+            background: #eef1f6;
+            color: #1c1c1e;
+            border: 1px solid #dfe4ec;
+            border-bottom-left-radius: 4px;
+        }
+        .msg-author {
+            font-size: 11px;
+            color: #8e8e93;
+            margin-bottom: 4px;
+        }
+        .task-item.channel-not-started { opacity: 0.55; }
+        .channel-gear {
+            cursor: pointer;
+            color: #8e8e93;
+            font-size: 14px;
+            line-height: 1;
+            flex-shrink: 0;
+            margin-left: 4px;
+            align-self: flex-start;
+            padding: 2px;
+            border-radius: 4px;
+            transition: background 0.15s, color 0.15s;
+        }
+        .channel-gear:hover { background: rgba(0,0,0,0.06); color: #636366; }
+        .channel-badge {
+            font-size: 11px;
+            color: #8e8e93;
+            margin-left: 6px;
+        }
+        .channel-dialog-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.35);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 2000;
+        }
+        .channel-dialog {
+            background: #fff; border-radius: 14px; padding: 20px 22px;
+            width: 360px; max-width: 90vw;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+        }
+        .channel-dialog-title { font-weight: 600; font-size: 16px; margin-bottom: 12px; }
+        .channel-dialog input[type="text"], .channel-dialog select {
+            width: 100%; padding: 8px 10px; border: 1px solid #e0e0e0; border-radius: 8px;
+            font-size: 14px; margin-bottom: 10px; box-sizing: border-box;
+        }
+        .channel-dialog-label { font-size: 12px; color: #8e8e93; margin: 6px 0 4px; }
+        .channel-member-list {
+            max-height: 140px; overflow-y: auto;
+            border: 1px solid #eee; border-radius: 8px; padding: 6px 10px;
+            font-size: 14px;
+        }
+        .channel-member-list label { display: block; padding: 3px 0; cursor: pointer; }
+        .channel-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+        .channel-dialog-actions button {
+            padding: 7px 16px; border-radius: 8px; border: 1px solid #e0e0e0;
+            background: #fff; cursor: pointer; font-size: 14px;
+        }
+        .channel-dialog-actions .channel-dialog-primary {
+            background: #007aff; color: #fff; border-color: #007aff;
+        }
         .msg.status {
             align-self: center;
             background: transparent;
@@ -363,7 +426,46 @@
             padding: 14px 24px 18px;
             display: flex;
             gap: 12px;
+            position: relative;
         }
+        .mention-popup {
+            position: absolute;
+            bottom: 100%;
+            left: 64px;
+            margin-bottom: 6px;
+            background: #ffffff;
+            border: 1px solid #e5e5ea;
+            border-radius: 10px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            min-width: 230px;
+            max-height: 264px;
+            overflow-y: auto;
+            z-index: 60;
+        }
+        .mention-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 14px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #1c1813;
+        }
+        .mention-item.active, .mention-item:hover { background: #f0f7ff; }
+        .mention-avatar {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: #007aff;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+        .mention-avatar.bot { background: #34c759; }
+        .mention-desc { color: #8e8e93; font-size: 12px; margin-left: auto; }
         .attach-btn {
             padding: 10px 12px;
             border: 1px solid #d1d1d6;
@@ -971,6 +1073,28 @@
             font-family: monospace;
             font-size: 12px;
         }
+        .markdown-body table {
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 13px;
+            display: block;
+            max-width: 100%;
+            overflow-x: auto;
+        }
+        .markdown-body th, .markdown-body td {
+            border: 1px solid #e3ddd2;
+            padding: 6px 10px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .markdown-body th {
+            background: #f7f3ec;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .markdown-body tr:nth-child(even) td {
+            background: #fbfbfa;
+        }
         .cross-ref-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -1264,6 +1388,140 @@
             gap: 12px;
         }
 
+        /* 招标看板 */
+        #panel-bids {
+            background: var(--paper);
+            overflow-y: auto;
+            flex-direction: column;
+        }
+        .bids-panel {
+            padding: 0;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .bids-header {
+            height: 58px;
+            padding: 0 18px;
+            border-bottom: 1px solid var(--line);
+            background: var(--paper);
+            display: flex;
+            align-items: center;
+        }
+        .bids-header-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+        }
+        .bids-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--ink);
+            font-family: var(--font-display);
+        }
+        .bids-meta {
+            font-size: 12px;
+            color: var(--ink-3);
+            white-space: nowrap;
+        }
+        .bids-body {
+            padding: 16px 18px;
+        }
+        .bids-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .bids-stat-card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 14px;
+            border: 1px solid var(--line);
+        }
+        .bids-stat-card .label {
+            font-size: 12px;
+            color: var(--ink-3);
+        }
+        .bids-stat-card .value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--ink);
+            margin-top: 4px;
+        }
+        .bids-stat-card .sub {
+            font-size: 11px;
+            color: var(--ink-3);
+            margin-top: 2px;
+        }
+        .bids-filter {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .bids-filter-btn {
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            background: var(--card);
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--ink-2);
+        }
+        .bids-filter-btn:hover {
+            background: var(--paper-2);
+        }
+        .bids-filter-btn.active {
+            background: var(--vermilion);
+            color: var(--paper);
+            border-color: var(--vermilion);
+        }
+        .bids-table-wrap {
+            overflow-x: auto;
+            background: var(--card);
+            border-radius: 12px;
+            border: 1px solid var(--line);
+        }
+        .bids-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            min-width: 640px;
+            table-layout: fixed;
+        }
+        .bids-table th,
+        .bids-table td {
+            border: 1px solid var(--line);
+            padding: 10px 12px;
+            text-align: left;
+            vertical-align: top;
+            line-height: 1.5;
+            color: var(--ink);
+        }
+        .bids-table thead tr { background: var(--paper-2); }
+        .bids-table thead th { font-weight: 600; color: var(--ink); }
+        .bids-table tbody tr:nth-child(even) { background: rgba(217, 207, 184, 0.15); }
+        .bids-table tbody tr:hover { background: var(--paper-2); }
+        .bids-table td.empty { color: var(--ink-3); text-align: center; }
+        .bids-table .title {
+            color: var(--vermilion);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .bids-table .title:hover { text-decoration: underline; }
+        .bids-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            background: rgba(0, 122, 255, 0.12);
+            color: #007aff;
+        }
+        .bids-amount { font-weight: 600; color: #16a34a; white-space: nowrap; }
+        .bids-time { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
+
         /* 左侧看板切换 */
         .panel-nav {
             display: flex;
@@ -1551,13 +1809,18 @@
                         <span class="panel-nav-icon">💰</span>
                         <span>政策看板</span>
                     </button>
+                    <button class="panel-nav-btn" data-panel="bids">
+                        <span class="panel-nav-icon">📑</span>
+                        <span>招标看板</span>
+                    </button>
                 </div>
             </div>
-            <div class="sidebar-section">
-                <button id="newTaskBtn" class="new-task-btn">+ 新建任务</button>
+            <div class="sidebar-section" id="projectChannelSection" style="max-height:32%; overflow-y:auto;">
+                <div class="sidebar-section-title">频道 <span id="newChannelBtn" style="cursor:pointer; float:right; font-weight:400;" title="新建自定义频道">＋</span></div>
+                <div id="projectChannelPanel" class="task-list"></div>
             </div>
             <div class="sidebar-section" id="taskHistorySection" style="flex:1; overflow-y:auto;">
-                <div class="sidebar-section-title">任务清单</div>
+                <div class="sidebar-section-title">对话清单 <span id="newTaskBtn" style="cursor:pointer; float:right; font-weight:400;" title="新建对话">＋</span></div>
                 <div id="taskHistoryPanel" class="task-list"></div>
             </div>
             <div class="sidebar-section" id="userSection">
@@ -1597,6 +1860,7 @@
                         <button id="attachBtn" class="attach-btn" title="上传附件">📎</button>
                         <input type="file" id="fileInput" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.html" style="display:none;">
                         <input type="text" id="message" placeholder="等待连接…" autocomplete="off" disabled>
+                        <div id="mentionPopup" class="mention-popup" style="display:none;"></div>
                         <button id="send" disabled>发送</button>
                         <button id="stop" style="display:none;">停止</button>
                         <button id="reconnect">重连</button>
@@ -1671,6 +1935,13 @@
                     <div class="panel-empty-state">加载销售政策中…</div>
                 </div>
             </div>
+
+            <!-- 招标看板 -->
+            <div id="panel-bids" class="panel">
+                <div class="bids-panel" id="bidsPanelContent">
+                    <div class="policy-empty-state">加载招标信息中…</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1693,6 +1964,41 @@
         🤖
         <span class="badge" id="floating-chat-badge">0</span>
     </button>
+
+    <!-- 新建频道对话框 -->
+    <div id="channelDialog" class="channel-dialog-overlay" style="display:none;">
+        <div class="channel-dialog">
+            <div class="channel-dialog-title">新建频道</div>
+            <input type="text" id="channelNameInput" placeholder="频道名称（30 字以内）" maxlength="30" autocomplete="off">
+            <div class="channel-dialog-label">关联项目（决定 AI 能看到哪个项目的数据，可选）</div>
+            <select id="channelProjectSelect"><option value="">无（纯讨论频道）</option></select>
+            <div class="channel-dialog-label">成员（一个都不选 = 全员开放）</div>
+            <div id="channelMemberList" class="channel-member-list">加载中…</div>
+            <div class="channel-dialog-actions">
+                <button id="channelDialogCancel">取消</button>
+                <button id="channelDialogCreate" class="channel-dialog-primary">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 频道管理对话框（创建者） -->
+    <div id="manageChannelDialog" class="channel-dialog-overlay" style="display:none;">
+        <div class="channel-dialog">
+            <div class="channel-dialog-title" id="manageChannelTitle">管理频道</div>
+            <div class="channel-dialog-label" id="manageChannelProject"></div>
+            <div class="channel-dialog-label">当前成员（✕ 移出）</div>
+            <div id="manageMemberList" class="channel-member-list"></div>
+            <div class="channel-dialog-label">添加成员</div>
+            <div id="manageAddList" class="channel-member-list"></div>
+            <div class="channel-dialog-actions" style="justify-content: space-between;">
+                <button id="manageDeleteBtn" style="color:#ff3b30; border-color:#ff3b30;">删除频道</button>
+                <span>
+                    <select id="manageTransferSelect" style="padding:6px; border:1px solid #e0e0e0; border-radius:8px; font-size:13px;"><option value="">转让创建者…</option></select>
+                    <button id="manageCloseBtn">完成</button>
+                </span>
+            </div>
+        </div>
+    </div>
 
     <script>
         const chat = document.getElementById("chat");
@@ -1722,6 +2028,7 @@
 
         let currentThreadId = null;
         let pendingAttachments = [];
+        let usersData = []; // 缓存 /api/users 返回
 
         // 轻量 toast
         function toast(message, duration = 2200) {
@@ -1742,7 +2049,228 @@
         // 当前在右侧面板展示的任务 ID
         let activeTaskId = null;
 
-        // 任务清单无限滚动状态
+        // 项目频道：当前打开的共享频道（null = 私有线程模式）
+        let currentChannel = null; // { threadId, projectName }
+
+        async function loadProjectChannels() {
+            try {
+                const res = await fetch(`/api/project_channels?user_id=${encodeURIComponent(userSelect.value || "web_user")}`);
+                const data = await res.json();
+                const panel = document.getElementById("projectChannelPanel");
+                if (!panel) return;
+                panel.innerHTML = "";
+                channelDataMap = {};
+                (data.channels || []).forEach(ch => {
+                    channelDataMap[ch.project_name] = ch;
+                    const div = document.createElement("div");
+                    div.className = "task-item channel-item" + (ch.thread_id ? "" : " channel-not-started");
+                    if (currentChannel && currentChannel.projectName === ch.project_name) div.classList.add("active");
+                    div.innerHTML = `<div class="task-item-title">📢 ${escapeHtml(ch.project_name)}${ch.thread_id ? "" : '<span class="channel-badge">点击开启</span>'}</div>`;
+                    // 自己创建的自定义频道：显示管理入口
+                    if (ch.source === "custom" && ch.created_by === (userSelect.value || "web_user")) {
+                        const gear = document.createElement("span");
+                        gear.textContent = "⚙";
+                        gear.className = "channel-gear";
+                        gear.title = "管理频道（成员/转让/删除）";
+                        gear.addEventListener("click", (e) => {
+                            e.stopPropagation();
+                            openManageChannelDialog(ch);
+                        });
+                        div.appendChild(gear);
+                    }
+                    div.addEventListener("click", () => openProjectChannel(ch.project_name));
+                    panel.appendChild(div);
+                });
+            } catch (e) {
+                console.error("loadProjectChannels failed", e);
+            }
+        }
+
+        function openProjectChannel(projectName, prefill) {
+            currentChannel = { threadId: currentChannel?.projectName === projectName ? currentChannel.threadId : null, projectName };
+            chat.innerHTML = "";
+            document.getElementById("chat-header-title").textContent = `📢 ${projectName} · 频道`;
+            messageInput.placeholder = `发到「${projectName}」频道（全员可见），@销销 才会回复`;
+            loadProjectChannels();
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ user_id: userSelect.value || "web_user", action: "hello", project_name: projectName }));
+            }
+            if (prefill) messageInput.value = prefill;
+            messageInput.focus();
+        }
+
+        function clearChannelMode() {
+            if (!currentChannel) return;
+            currentChannel = null;
+            closeMention();
+            document.getElementById("chat-header-title").innerHTML = '<img src="/data/assets/xiaoxiaoshu-logo.png" alt="销销树" class="logo-sm">与销销协作';
+            messageInput.placeholder = "给销销发消息…";
+            loadProjectChannels();
+        }
+
+        // 新建频道对话框：创建者选成员、选关联项目
+        const channelDialog = document.getElementById("channelDialog");
+        const channelNameInput = document.getElementById("channelNameInput");
+        const channelProjectSelect = document.getElementById("channelProjectSelect");
+        const channelMemberList = document.getElementById("channelMemberList");
+
+        async function openChannelDialog() {
+            channelNameInput.value = "";
+            channelDialog.style.display = "flex";
+            channelNameInput.focus();
+            // 填充项目下拉与成员复选
+            try {
+                const [accRes, userRes] = await Promise.all([
+                    fetch("/api/project_accounts").then(r => r.json()),
+                    fetch("/api/users").then(r => r.json()),
+                ]);
+                channelProjectSelect.innerHTML = '<option value="">无（纯讨论频道）</option>' +
+                    (accRes.accounts || []).map(a => `<option value="${escapeHtml(a.name)}">${escapeHtml(a.name)}</option>`).join("");
+                const selfId = userSelect.value || "web_user";
+                channelMemberList.innerHTML = (userRes || [])
+                    .filter(u => u.user_id !== selfId)
+                    .map(u => `<label><input type="checkbox" value="${escapeHtml(u.user_id)}"> ${escapeHtml(u.name || u.user_id)}</label>`)
+                    .join("") || "（暂无其他成员可选）";
+            } catch (e) {
+                channelMemberList.textContent = "成员列表加载失败";
+            }
+        }
+
+        document.getElementById("channelDialogCancel").addEventListener("click", () => {
+            channelDialog.style.display = "none";
+        });
+
+        document.getElementById("channelDialogCreate").addEventListener("click", async () => {
+            const name = channelNameInput.value.trim();
+            if (!name) { channelNameInput.focus(); return; }
+            const project = channelProjectSelect.value;
+            const members = Array.from(channelMemberList.querySelectorAll("input[type=checkbox]:checked"))
+                .map(cb => cb.value);
+            const params = new URLSearchParams({
+                user_id: userSelect.value || "web_user",
+                name,
+                project,
+                members: members.join(","),
+            });
+            const res = await fetch(`/api/create_channel?${params}`, { method: "POST" });
+            const data = await res.json();
+            if (!data.success) {
+                window.alert(data.error || "创建失败");
+                return;
+            }
+            channelDialog.style.display = "none";
+            await loadProjectChannels();
+            openProjectChannel(name);
+        });
+
+        document.getElementById("newChannelBtn").addEventListener("click", openChannelDialog);
+
+        // ========== 频道管理（创建者）：成员增删 / 转让 / 删除 ==========
+        const manageDialog = document.getElementById("manageChannelDialog");
+        let managingChannel = null;
+
+        async function openManageChannelDialog(ch) {
+            managingChannel = ch;
+            renderManageDialog();
+            manageDialog.style.display = "flex";
+        }
+
+        async function channelApi(endpoint, params) {
+            const res = await fetch(`${endpoint}?${new URLSearchParams(params)}`, { method: "POST" });
+            return res.json();
+        }
+
+        async function renderManageDialog() {
+            const ch = managingChannel;
+            if (!ch) return;
+            const selfId = userSelect.value || "web_user";
+            document.getElementById("manageChannelTitle").textContent = `管理频道：${ch.project_name}`;
+            document.getElementById("manageChannelProject").textContent =
+                `关联项目：${ch.linked_project || "无"}`;
+            const allUsers = await fetch("/api/users").then(r => r.json()).catch(() => []);
+            const nameOf = (uid) => (allUsers.find(u => u.user_id === uid)?.name) || uid;
+            const members = ch.members || [];
+
+            // 当前成员（含创建者标记）
+            document.getElementById("manageMemberList").innerHTML =
+                [`<div>👑 ${escapeHtml(nameOf(ch.created_by))}（创建者）</div>`,
+                 ...members.map(uid =>
+                    `<div style="display:flex; justify-content:space-between;">
+                        <span>${escapeHtml(nameOf(uid))}</span>
+                        <a href="javascript:void 0" data-remove="${escapeHtml(uid)}" style="color:#ff3b30; text-decoration:none;">✕</a>
+                    </div>`)
+                ].join("") || "（无成员）";
+            document.getElementById("manageMemberList").querySelectorAll("[data-remove]").forEach(a => {
+                a.addEventListener("click", async () => {
+                    await channelApi("/api/channel_members", {
+                        user_id: selfId, thread_id: ch.thread_id, member: a.dataset.remove, action: "remove",
+                    });
+                    managingChannel.members = members.filter(m => m !== a.dataset.remove);
+                    renderManageDialog();
+                    loadProjectChannels();
+                });
+            });
+
+            // 可添加成员（不在成员里、不是创建者）
+            const candidates = (allUsers || []).filter(u => u.user_id !== ch.created_by && !members.includes(u.user_id));
+            document.getElementById("manageAddList").innerHTML = candidates.length
+                ? candidates.map(u => `<label><input type="checkbox" value="${escapeHtml(u.user_id)}"> ${escapeHtml(u.name || u.user_id)}</label>`).join("") +
+                  `<button id="manageAddBtn" style="margin-top:6px; padding:4px 12px; border-radius:6px; border:1px solid #007aff; background:#007aff; color:#fff; cursor:pointer; font-size:13px;">添加选中</button>`
+                : "（已包含全部成员）";
+            const addBtn = document.getElementById("manageAddBtn");
+            if (addBtn) {
+                addBtn.addEventListener("click", async () => {
+                    const checked = Array.from(document.getElementById("manageAddList").querySelectorAll("input:checked")).map(cb => cb.value);
+                    for (const uid of checked) {
+                        await channelApi("/api/channel_members", {
+                            user_id: selfId, thread_id: ch.thread_id, member: uid, action: "add",
+                        });
+                    }
+                    managingChannel.members = [...members, ...checked];
+                    renderManageDialog();
+                    loadProjectChannels();
+                });
+            }
+
+            // 转让下拉（成员中选）
+            const sel = document.getElementById("manageTransferSelect");
+            sel.innerHTML = '<option value="">转让创建者…</option>' +
+                members.map(uid => `<option value="${escapeHtml(uid)}">${escapeHtml(nameOf(uid))}</option>`).join("");
+        }
+
+        document.getElementById("manageTransferSelect").addEventListener("change", async (e) => {
+            const newOwner = e.target.value;
+            if (!newOwner || !managingChannel) return;
+            if (!window.confirm(`确定把「${managingChannel.project_name}」的创建者转让给 ${newOwner}？转让后你将失去管理权限。`)) {
+                e.target.value = "";
+                return;
+            }
+            const data = await channelApi("/api/channel_transfer", {
+                user_id: userSelect.value || "web_user", thread_id: managingChannel.thread_id, new_owner: newOwner,
+            });
+            if (!data.success) { window.alert(data.error || "转让失败"); return; }
+            manageDialog.style.display = "none";
+            loadProjectChannels();
+        });
+
+        document.getElementById("manageDeleteBtn").addEventListener("click", async () => {
+            if (!managingChannel) return;
+            if (!window.confirm(`确定删除频道「${managingChannel.project_name}」？全部聊天记录将被删除，不可恢复。`)) return;
+            const data = await channelApi("/api/delete_channel", {
+                user_id: userSelect.value || "web_user", thread_id: managingChannel.thread_id,
+            });
+            if (!data.success) { window.alert(data.error || "删除失败"); return; }
+            manageDialog.style.display = "none";
+            clearChannelMode();
+            chat.innerHTML = "";
+            loadProjectChannels();
+        });
+
+        document.getElementById("manageCloseBtn").addEventListener("click", () => {
+            manageDialog.style.display = "none";
+        });
+
+        // 对话清单无限滚动状态
         let taskHistoryOffset = 0;
         const TASK_HISTORY_LIMIT = 10;
         let taskHistoryHasMore = true;
@@ -1762,12 +2290,12 @@
             }
         })();
 
-        // 用户手动点击“新建任务”后，短暂跳过轮询，避免旧任务重新覆盖空状态
+        // 用户手动点击“新建对话”后，短暂跳过轮询，避免旧对话重新覆盖空状态
         let manualNewTask = false;
 
         function append(text, cls = "agent") {
             const div = document.createElement("div");
-            div.className = "msg " + cls;
+            div.className = "msg " + cls + (cls === "agent" ? " markdown-body" : "");
             div.innerHTML = text;
             chat.appendChild(div);
             chat.scrollTop = chat.scrollHeight;
@@ -1783,9 +2311,10 @@
         function renderMarkdown(text) {
             if (!text) return "";
             if (typeof marked !== "undefined") {
+                marked.setOptions({ gfm: true, breaks: true });
                 return marked.parse(text);
             }
-            return escapeHtml(text).replace(/\\n/g, "<br>");
+            return escapeHtml(text).replace(/\n/g, "<br>");
         }
 
         function formatTime(ts) {
@@ -2031,6 +2560,7 @@
                 const res = await fetch("/api/users");
                 if (!res.ok) throw new Error("加载用户失败");
                 const users = await res.json();
+                usersData = users;
                 userSelect.innerHTML = "";
                 userMenu.innerHTML = "";
                 if (users.length === 0) {
@@ -2057,7 +2587,11 @@
                     });
                     userMenu.appendChild(item);
                 });
-                setCurrentUser(users[0].user_id, true);
+                const savedUserId = localStorage.getItem("xiaoxiao_last_user_id");
+                const initialUserId = savedUserId && users.some(u => u.user_id === savedUserId)
+                    ? savedUserId
+                    : users[0].user_id;
+                setCurrentUser(initialUserId, true);
             } catch (e) {
                 console.error(e);
                 append("加载销售人员失败，请刷新页面重试", "error");
@@ -2077,10 +2611,16 @@
 
         function setCurrentUser(userId, silent = false) {
             userSelect.value = userId;
-            const option = Array.from(userSelect.options).find(o => o.value === userId);
-            if (option) {
-                const name = option.textContent.split(" (")[0];
-                updateUserProfile({ user_id: option.value, name });
+            localStorage.setItem("xiaoxiao_last_user_id", userId);
+            const user = usersData.find(u => u.user_id === userId);
+            if (user) {
+                updateUserProfile(user);
+            } else {
+                const option = Array.from(userSelect.options).find(o => o.value === userId);
+                if (option) {
+                    const name = option.textContent.split(" (")[0];
+                    updateUserProfile({ user_id: option.value, name });
+                }
             }
             Array.from(userMenu.children).forEach(item => {
                 item.classList.toggle("active", item.dataset.userId === userId);
@@ -2239,7 +2779,7 @@
                 taskHistoryOffset = offset + data.tasks.length;
                 taskHistoryHasMore = data.tasks.length >= TASK_HISTORY_LIMIT;
             } catch (e) {
-                console.error("加载任务清单失败:", e);
+                console.error("加载对话清单失败:", e);
             } finally {
                 taskHistoryLoading = false;
                 highlightActiveTaskInList();
@@ -2336,6 +2876,8 @@
         }
 
         async function loadTaskDetail(taskId) {
+            clearChannelMode();
+            switchPanel("collab");
             const userId = userSelect.value || "web_user";
             try {
                 // 1. 切换活跃线程到选中的历史任务
@@ -2376,9 +2918,13 @@
                 currentStatus = null;
                 streamingMsg = null;
                 messageInput.focus();
-                // 连接成功后发送握手，服务端据此恢复历史对话
+                // 连接成功后发送握手，服务端据此恢复历史对话；频道模式下重新进入频道
                 const userId = userSelect.value || "web_user";
-                ws.send(JSON.stringify({ user_id: userId, action: "hello" }));
+                if (currentChannel) {
+                    ws.send(JSON.stringify({ user_id: userId, action: "hello", project_name: currentChannel.projectName }));
+                } else {
+                    ws.send(JSON.stringify({ user_id: userId, action: "hello" }));
+                }
             };
 
             ws.onclose = () => {
@@ -2405,7 +2951,7 @@
                 }
                 if (!streamingMsg) {
                     streamingMsg = document.createElement("div");
-                    streamingMsg.className = "msg agent";
+                    streamingMsg.className = "msg agent markdown-body";
                     streamingMsg.style.whiteSpace = "pre-wrap";
                     chat.appendChild(streamingMsg);
                     chat.scrollTop = chat.scrollHeight;
@@ -2415,31 +2961,58 @@
 
             ws.onmessage = (ev) => {
                 const data = JSON.parse(ev.data);
+                // 频道广播：只处理当前正在查看的频道（无 thread_id 的是直连本客户端的消息，正常处理）
+                if (data.thread_id && data.type !== "history" && data.type !== "channel_message"
+                    && (!currentChannel || data.thread_id !== currentChannel.threadId)) {
+                    return;
+                }
                 if (data.type === "status") {
                     if (!currentStatus) currentStatus = append(data.message, "status");
                     else currentStatus.textContent = data.message;
                 } else if (data.type === "event") {
                     if (!currentStatus) currentStatus = append(data.message || "处理中…", "status");
                     else currentStatus.textContent = data.message || "处理中…";
+                } else if (data.type === "channel_message") {
+                    // 频道新消息广播（含自己发的，统一由广播渲染，避免本地+广播双条）
+                    if (!currentChannel || data.thread_id !== currentChannel.threadId) return;
+                    if (data.role === "user") {
+                        const isSelf = data.user_id === (userSelect.value || "web_user");
+                        const label = isSelf ? "" : `<div class="msg-author">${escapeHtml(data.user_name || data.user_id || "")}</div>`;
+                        append(label + renderMessageContent(data.content || ""), isSelf ? "user" : "other-user");
+                    }
+                    chat.scrollTop = chat.scrollHeight;
                 } else if (data.type === "history") {
                     // 恢复历史对话到聊天框
                     if (data.thread_id) {
                         currentThreadId = data.thread_id;
                     }
+                    if (data.project_name) {
+                        currentChannel = { threadId: data.thread_id, projectName: data.project_name };
+                        loadProjectChannels();
+                    }
                     if (data.hint) {
                         append(`<em style="color:#888">${escapeHtml(data.hint)}</em>`, "status");
                     }
+                    const selfId = userSelect.value || "web_user";
                     (data.messages || []).forEach(m => {
-                        const cls = m.role === "user" ? "user" : "agent";
-                        append(renderMessageContent(m.content), cls);
+                        if (m.role === "user" && data.project_name && m.user_id && m.user_id !== selfId) {
+                            append(`<div class="msg-author">${escapeHtml(m.user_name || m.user_id)}</div>` + renderMessageContent(m.content), "other-user");
+                        } else {
+                            const cls = m.role === "user" ? "user" : "agent";
+                            append(m.role === "user" ? renderMessageContent(m.content) : renderMarkdown(m.content), cls);
+                        }
                     });
                     chat.scrollTop = chat.scrollHeight;
+                } else if (data.type === "thread_created") {
+                    currentThreadId = data.thread_id;
+                    pollTask();
+                    loadTaskHistory();
                 } else if (data.type === "token") {
                     ensureStreamingAgent().textContent += data.content;
                     chat.scrollTop = chat.scrollHeight;
                 } else if (data.type === "result") {
                     if (currentStatus) { currentStatus.remove(); currentStatus = null; }
-                    let html = escapeHtml(data.reply).replace(/\\n/g, "<br>");
+                    let html = renderMarkdown(data.reply);
                     (data.files || []).forEach(f => {
                         const href = f.startsWith("/") ? f : "/" + f;
                         html += `<a class="file-link" href="${href}" target="_blank">📎 ${f.split("/").pop()}</a>`;
@@ -2452,6 +3025,7 @@
                         });
                     }
                     if (streamingMsg) {
+                        streamingMsg.style.whiteSpace = "";
                         streamingMsg.innerHTML = html;
                         streamingMsg = null;
                     } else {
@@ -2469,10 +3043,32 @@
         }
 
         function send() {
+            closeMention();
             const text = messageInput.value.trim();
             if (!text && pendingAttachments.length === 0) return;
             if (!ws || ws.readyState !== WebSocket.OPEN) {
                 append("尚未连接到服务器，请稍等或点击重连", "error");
+                return;
+            }
+            // 项目频道：消息由服务端广播统一渲染（含自己的），输入框保持可用
+            if (currentChannel) {
+                if (!currentChannel.threadId) {
+                    append("频道尚未就绪，请稍候再发", "error");
+                    return;
+                }
+                const payload = {
+                    user_id: userSelect.value,
+                    message: text,
+                    attachments: pendingAttachments,
+                    thread_id: currentChannel.threadId,
+                };
+                pendingAttachments = [];
+                updateAttachmentPreview();
+                messageInput.value = "";
+                if (!/[@＠](销销|xiaoxiao)/i.test(text)) {
+                    append(`<em style="color:#888">已发送到频道（未 @销销，AI 不会回复）</em>`, "status");
+                }
+                ws.send(JSON.stringify(payload));
                 return;
             }
             manualNewTask = false;
@@ -2500,7 +3096,110 @@
         }
 
         sendBtn.addEventListener("click", send);
-        messageInput.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+        messageInput.addEventListener("keydown", (e) => {
+            // @ 补全弹出时优先响应导航键
+            if (mentionState) {
+                if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    mentionState.active = (mentionState.active + 1) % mentionState.items.length;
+                    renderMentionPopup();
+                    return;
+                }
+                if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    mentionState.active = (mentionState.active - 1 + mentionState.items.length) % mentionState.items.length;
+                    renderMentionPopup();
+                    return;
+                }
+                if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    applyMention(mentionState.items[mentionState.active]);
+                    return;
+                }
+                if (e.key === "Escape") {
+                    e.preventDefault();
+                    closeMention();
+                    return;
+                }
+            }
+            if (e.key === "Enter") send();
+        });
+        messageInput.addEventListener("input", updateMentionPopup);
+        messageInput.addEventListener("click", updateMentionPopup);
+        messageInput.addEventListener("keyup", (e) => {
+            if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) updateMentionPopup();
+        });
+        messageInput.addEventListener("blur", () => setTimeout(closeMention, 150));
+
+        // ========== @ 提及自动补全（频道模式） ==========
+        const mentionPopup = document.getElementById("mentionPopup");
+        let mentionState = null; // { start, items, active }
+        let channelDataMap = {}; // project_name -> 频道数据（含 members/created_by）
+
+        // 候选：销销在前；自定义成员频道只列创建者+成员，开放频道列全员（除自己）
+        function getMentionCandidates() {
+            const selfId = userSelect.value || "web_user";
+            const cands = [{ id: "__bot__", name: "销销", desc: "AI 助手", insert: "@销销 ", bot: true }];
+            let users = Array.from(userSelect.options)
+                .map(o => ({ id: o.value, name: o.textContent.split(" (")[0] }));
+            const ch = currentChannel ? channelDataMap[currentChannel.projectName] : null;
+            if (ch && ch.source === "custom" && Array.isArray(ch.members) && ch.members.length > 0) {
+                const allowed = new Set([ch.created_by, ...ch.members]);
+                users = users.filter(u => allowed.has(u.id));
+            }
+            users.filter(u => u.id !== selfId).forEach(u => {
+                cands.push({ id: u.id, name: u.name, desc: u.id, insert: `@${u.name} `, bot: false });
+            });
+            return cands;
+        }
+
+        function updateMentionPopup() {
+            if (!currentChannel || messageInput.disabled) { closeMention(); return; }
+            const caret = messageInput.selectionStart ?? 0;
+            const before = messageInput.value.slice(0, caret);
+            const m = before.match(/(?:^|\s)[@＠]([^\s@＠]{0,12})$/);
+            if (!m) { closeMention(); return; }
+            const filter = m[1].toLowerCase();
+            const items = getMentionCandidates().filter(c =>
+                !filter ||
+                c.name.toLowerCase().includes(filter) ||
+                c.id.toLowerCase().includes(filter) ||
+                (c.bot && "xiaoxiao".startsWith(filter))
+            );
+            if (items.length === 0) { closeMention(); return; }
+            mentionState = { start: caret - m[1].length - 1, items, active: 0 };
+            renderMentionPopup();
+        }
+
+        function renderMentionPopup() {
+            if (!mentionState) { mentionPopup.style.display = "none"; return; }
+            mentionPopup.innerHTML = "";
+            mentionState.items.forEach((item, idx) => {
+                const div = document.createElement("div");
+                div.className = "mention-item" + (idx === mentionState.active ? " active" : "");
+                div.innerHTML = `<div class="mention-avatar${item.bot ? " bot" : ""}">${item.bot ? "🤖" : escapeHtml(getInitial(item.name))}</div>` +
+                    `<span>${escapeHtml(item.name)}</span><span class="mention-desc">${escapeHtml(item.desc)}</span>`;
+                div.addEventListener("mousedown", (e) => { e.preventDefault(); applyMention(item); });
+                mentionPopup.appendChild(div);
+            });
+            mentionPopup.style.display = "block";
+        }
+
+        function applyMention(item) {
+            const caret = messageInput.selectionStart ?? messageInput.value.length;
+            const before = messageInput.value.slice(0, mentionState.start);
+            const after = messageInput.value.slice(caret);
+            messageInput.value = before + item.insert + after;
+            const pos = (before + item.insert).length;
+            messageInput.setSelectionRange(pos, pos);
+            closeMention();
+            messageInput.focus();
+        }
+
+        function closeMention() {
+            mentionState = null;
+            mentionPopup.style.display = "none";
+        }
         messageInput.addEventListener("paste", handlePaste);
         document.addEventListener("paste", (e) => {
             if (document.activeElement === messageInput) return;
@@ -2514,7 +3213,9 @@
         setupDragDrop(mainEl, uploadFiles);
         stopBtn.addEventListener("click", () => {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
-            ws.send(JSON.stringify({ user_id: userSelect.value, action: "stop" }));
+            const payload = { user_id: userSelect.value, action: "stop" };
+            if (currentChannel?.threadId) payload.thread_id = currentChannel.threadId;
+            ws.send(JSON.stringify(payload));
             stopBtn.disabled = true;
         });
         reconnectBtn.addEventListener("click", () => {
@@ -2533,6 +3234,7 @@
         });
 
         newTaskBtn.addEventListener("click", async () => {
+            clearChannelMode();
             const userId = userSelect.value || "web_user";
             try {
                 const res = await fetch(`/api/new_thread?user_id=${userId}`, { method: "POST" });
@@ -2543,16 +3245,16 @@
                     // 清空聊天区域
                     chat.innerHTML = `
                         <div class="msg agent">
-                            <div class="message-content">已新建任务，请直接输入你想研究/处理的内容，比如："研究一下快手公司"或"帮我写一封跟进邮件"</div>
+                            <div class="message-content">已新建对话，请直接输入你想研究/处理的内容，比如："研究一下快手公司"或"帮我写一封跟进邮件"</div>
                         </div>
                     `;
                     // 清空当前任务展示
                     renderCurrentTask(null);
                 } else {
-                    alert("新建任务失败：" + (data.error || "未知错误"));
+                    alert("新建对话失败：" + (data.error || "未知错误"));
                 }
             } catch (e) {
-                console.error("新建任务失败:", e);
+                console.error("新建对话失败:", e);
             }
         });
 
@@ -2565,7 +3267,7 @@
             });
         });
 
-        userSelect.addEventListener("change", () => { pollTask(); loadTaskHistory(); });
+        userSelect.addEventListener("change", () => { clearChannelMode(); pollTask(); loadTaskHistory(); loadProjectChannels(); });
 
         // ========== 面板切换 ==========
         const panels = document.querySelectorAll(".panel");
@@ -2764,6 +3466,38 @@
             return "";
         }
 
+        // 失败/空数据时也渲染账户切换器和刷新按钮，避免卡住无法切回其他项目
+        function renderProjectErrorState(message) {
+            projectPanelContent.innerHTML = `
+                <div class="project-panel">
+                    <div class="project-header">
+                        <div class="panel-header-row">
+                            ${renderProjectAccountSelector()}
+                            <button class="panel-refresh-btn" id="refreshProjectPanel">🔄 更新</button>
+                        </div>
+                    </div>
+                    <div class="project-body">
+                        <div class="project-empty-state">${escapeHtml(message)}</div>
+                    </div>
+                </div>
+            `;
+            bindProjectPanelHeader();
+        }
+
+        function bindProjectPanelHeader() {
+            const refreshBtn = document.getElementById("refreshProjectPanel");
+            if (refreshBtn) {
+                refreshBtn.addEventListener("click", () => refreshProjectPanel(refreshBtn));
+            }
+            const accountSelect = document.getElementById("projectAccountSelect");
+            if (accountSelect) {
+                accountSelect.addEventListener("change", (e) => {
+                    projectPanelLoaded = false;
+                    loadProjectPanel(e.target.value);
+                });
+            }
+        }
+
         async function loadProjectPanel(account = currentProjectAccount) {
             if (projectPanelLoaded && account === currentProjectAccount) return;
             currentProjectAccount = account;
@@ -2772,14 +3506,14 @@
                 const res = await fetch(`/api/project_panel?account=${encoded}`);
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({ error: "加载失败" }));
-                    projectPanelContent.innerHTML = `<div class="project-empty-state">${err.error || "暂无项目看板数据"}</div>`;
+                    renderProjectErrorState(err.error || "暂无项目看板数据");
                     return;
                 }
                 const data = await res.json();
                 renderProjectPanel(data);
                 projectPanelLoaded = true;
             } catch (e) {
-                projectPanelContent.innerHTML = "<div class=\"project-empty-state\">项目看板加载失败，请稍后重试</div>";
+                renderProjectErrorState("项目看板加载失败，请稍后重试");
             }
         }
 
@@ -2802,7 +3536,8 @@
                     }
                 }, 35000);
             } catch (e) {
-                projectPanelContent.innerHTML = "<div class=\"project-empty-state\">刷新失败，请稍后重试</div>";
+                renderProjectErrorState("刷新失败，请稍后重试");
+                projectPanelLoaded = false;
                 if (btn) {
                     btn.disabled = false;
                     btn.textContent = "🔄 更新";
@@ -2896,7 +3631,7 @@
         function renderProjectPanel(data) {
             const account = data.account_name || "客户";
             const source = getCurrentProjectSource();
-            const sourceLabel = source === "dingtalk" ? "钉钉群" : source === "hybrid" ? "混合来源" : "飞书群";
+            const sourceLabel = source === "dingtalk" ? "钉钉群" : source === "wechat" ? "微信群" : source === "hybrid" ? "混合来源" : "飞书群";
             const signals = (data.signals || []).map((s, i) => `
                 <div class="project-signal ${signalClass(s.type)}" data-signal-idx="${i}">
                     <div class="signal-header">
@@ -2938,7 +3673,7 @@
                     <div class="project-header">
                         <div class="panel-header-row">
                             ${renderProjectAccountSelector()}
-                            <span class="project-meta">来源：${sourceLabel} · 最近更新 ${new Date().toLocaleString()}</span>
+                            <span class="project-meta">来源：${sourceLabel} · 数据更新于 ${data._generated_at ? new Date(data._generated_at).toLocaleString() : "未知"}</span>
                             <button class="panel-refresh-btn" id="refreshProjectPanel">🔄 更新</button>
                         </div>
                     </div>
@@ -2991,18 +3726,7 @@
                 btn.addEventListener("click", () => btn.classList.toggle("done"));
             });
 
-            const refreshBtn = document.getElementById("refreshProjectPanel");
-            if (refreshBtn) {
-                refreshBtn.addEventListener("click", () => refreshProjectPanel(refreshBtn));
-            }
-
-            const accountSelect = document.getElementById("projectAccountSelect");
-            if (accountSelect) {
-                accountSelect.addEventListener("change", (e) => {
-                    projectPanelLoaded = false;
-                    loadProjectPanel(e.target.value);
-                });
-            }
+            bindProjectPanelHeader();
 
             const overviewBtn = document.getElementById("askAccountOverview");
             if (overviewBtn) {
@@ -3040,35 +3764,15 @@
             } else {
                 prompt += "基于原始上下文，帮我拟一段发给客户或内部协同的跟进话术，要求自然、专业、不冗长。";
             }
-            sendFromProjectPanel(prompt);
+            // 打开项目共享频道并预填（不自动发送，频道内容全员可见）
+            switchPanel("collab");
+            openProjectChannel(account, `@销销 ${prompt}`);
         }
 
         function openProjectChat(account) {
-            floatingChatMessages.innerHTML = "";
-            floatingChatEl.classList.add("open");
-            floatingChatToggle.classList.remove("open");
-            floatUnread = 0;
-            updateFloatBadge();
-            loadTaskHistory();
-            if (wsFloat) {
-                wsFloat.onclose = null;
-                wsFloat.onmessage = null;
-                wsFloat.close();
-                wsFloat = null;
-            }
-            if (floatReconnectTimer) {
-                clearTimeout(floatReconnectTimer);
-                floatReconnectTimer = null;
-            }
-            connectFloatingChat({
-                createThread: true,
-                threadTitle: account,
-                onOpen: () => {
-                    floatingChatInput.value = "";
-                    floatingChatInput.placeholder = `关于 ${account}，想问销销什么？`;
-                    floatingChatInput.focus();
-                }
-            });
+            // 项目聊天 = 共享项目频道（全员可见可读全量历史），不再新建私有线程
+            switchPanel("collab");
+            openProjectChannel(account);
         }
 
         function sendFromProjectPanel(prompt) {
@@ -3108,6 +3812,9 @@
             }
             if (name === "policy") {
                 loadPolicyPanel();
+            }
+            if (name === "bids") {
+                loadBidPanel();
             }
         };
 
@@ -3295,6 +4002,131 @@
             }, 250);
         }
 
+        // ========== 招标看板加载 ==========
+        const bidsPanelContent = document.getElementById("bidsPanelContent");
+        let bidPanelLoaded = false;
+        let currentBidKeyword = "";
+
+        async function loadBidPanel({ keyword = currentBidKeyword } = {}) {
+            currentBidKeyword = keyword;
+            try {
+                const params = new URLSearchParams();
+                if (keyword) params.set("keyword", keyword);
+                params.set("days", "7");
+                params.set("limit", "200");
+                const [listRes, statsRes, kwRes] = await Promise.all([
+                    fetch(`/api/bids?${params.toString()}`),
+                    fetch("/api/bids/stats"),
+                    fetch("/api/bids/keywords"),
+                ]);
+                const listData = await listRes.json();
+                const statsData = await statsRes.json();
+                const kwData = await kwRes.json();
+                renderBidPanel(listData, statsData, kwData, keyword);
+                bidPanelLoaded = true;
+            } catch (e) {
+                console.error("招标看板加载失败:", e);
+                bidsPanelContent.innerHTML = '<div class="policy-empty-state">招标信息加载失败，请稍后重试</div>';
+            }
+        }
+
+        function renderBidFilterBtn(value, label, current) {
+            const active = (value === current) ? " active" : "";
+            return `<button class="bids-filter-btn${active}" data-keyword="${escapeHtml(value)}">${escapeHtml(label)}</button>`;
+        }
+
+        function renderBidPanel(listData, statsData, kwData, keyword) {
+            const bids = listData.data || [];
+            const today = new Date().toISOString().split("T")[0];
+            const todayStat = (statsData.data || []).find(d => d.date === today);
+            const weekCount = (statsData.data || []).slice(0, 7).reduce((sum, d) => sum + Number(d.count || 0), 0);
+            const keywords = kwData.data || [];
+
+            let html = `
+                <div class="bids-header">
+                    <div class="bids-header-row">
+                        <span class="bids-title">招标看板</span>
+                        <span class="bids-meta">来源：bbda.com · 每日自动拉取近3天</span>
+                    </div>
+                </div>
+                <div class="bids-body">
+                    <div class="bids-stats">
+                        <div class="bids-stat-card">
+                            <div class="label">今日新增</div>
+                            <div class="value">${todayStat ? todayStat.count : 0}</div>
+                            <div class="sub">条招标信息</div>
+                        </div>
+                        <div class="bids-stat-card">
+                            <div class="label">近7天</div>
+                            <div class="value">${weekCount}</div>
+                            <div class="sub">条招标信息</div>
+                        </div>
+                        <div class="bids-stat-card">
+                            <div class="label">覆盖关键词</div>
+                            <div class="value">${keywords.length}</div>
+                            <div class="sub">个搜索词</div>
+                        </div>
+                        <div class="bids-stat-card">
+                            <div class="label">最后更新</div>
+                            <div class="value" style="font-size:14px">${new Date().toLocaleString("zh-CN")}</div>
+                            <div class="sub">自动拉取</div>
+                        </div>
+                    </div>
+                    <div class="bids-filter" id="bidsFilter">
+                        ${renderBidFilterBtn("", "全部", keyword)}
+                        ${renderBidFilterBtn("千川", "千川", keyword)}
+                        ${renderBidFilterBtn("短视频", "短视频", keyword)}
+                        ${renderBidFilterBtn("抖音", "抖音", keyword)}
+                        ${renderBidFilterBtn("直播", "直播", keyword)}
+                        ${renderBidFilterBtn("代运营", "代运营", keyword)}
+                        ${renderBidFilterBtn("kol", "KOL", keyword)}
+                        ${renderBidFilterBtn("koc", "KOC", keyword)}
+                        ${renderBidFilterBtn("达人", "达人", keyword)}
+                        ${renderBidFilterBtn("aigc", "AIGC", keyword)}
+                        ${renderBidFilterBtn("tiktok", "TikTok", keyword)}
+                        ${renderBidFilterBtn("支付宝", "支付宝", keyword)}
+                        ${renderBidFilterBtn("cid", "CID", keyword)}
+                        ${renderBidFilterBtn("阿里妈妈", "阿里妈妈", keyword)}
+                        ${renderBidFilterBtn("品牌广告", "品牌广告", keyword)}
+                    </div>
+                    <div class="bids-table-wrap">
+                        <table class="bids-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:55%">标题</th>
+                                    <th style="width:13%">关键词</th>
+                                    <th style="width:14%">金额</th>
+                                    <th style="width:18%">发布时间</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${bids.length ? bids.map(b => `
+                                    <tr>
+                                        <td>
+                                            <span class="title" style="cursor:default;">${escapeHtml((b.title || '无标题').substring(0, 80) + ((b.title || '').length > 80 ? '...' : ''))}</span>
+                                        </td>
+                                        <td><span class="bids-tag">${escapeHtml(b.keyword || '-')}</span></td>
+                                        <td class="bids-amount">${escapeHtml(b.amount || '-')}</td>
+                                        <td class="bids-time">${escapeHtml(b.publish_time || '-')}</td>
+                                    </tr>
+                                `).join('') : '<tr><td colspan="4" class="empty">暂无数据</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            bidsPanelContent.innerHTML = html;
+            bindBidFilter();
+        }
+
+        function bindBidFilter() {
+            document.querySelectorAll(".bids-filter-btn").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    loadBidPanel({ keyword: btn.dataset.keyword });
+                });
+            });
+        }
+
         // ========== 悬浮聊天窗口 ==========
         let wsFloat = null;
         let floatCurrentStatus = null;
@@ -3306,7 +4138,7 @@
 
         function appendMini(text, cls = "agent") {
             const div = document.createElement("div");
-            div.className = "mini-msg " + cls;
+            div.className = "mini-msg " + cls + (cls === "agent" ? " markdown-body" : "");
             div.innerHTML = text;
             floatingChatMessages.appendChild(div);
             floatingChatMessages.scrollTop = floatingChatMessages.scrollHeight;
@@ -3370,7 +4202,7 @@
                 }
                 if (!floatStreamingMsg) {
                     floatStreamingMsg = document.createElement("div");
-                    floatStreamingMsg.className = "mini-msg agent";
+                    floatStreamingMsg.className = "mini-msg agent markdown-body";
                     floatStreamingMsg.style.whiteSpace = "pre-wrap";
                     floatingChatMessages.appendChild(floatStreamingMsg);
                     floatingChatMessages.scrollTop = floatingChatMessages.scrollHeight;
@@ -3387,7 +4219,7 @@
                     if (data.hint) appendMini(`<em style="color:#888">${escapeHtml(data.hint)}</em>`, "status");
                     (data.messages || []).forEach(m => {
                         const cls = m.role === "user" ? "user" : "agent";
-                        appendMini(renderMessageContent(m.content), cls);
+                        appendMini(m.role === "user" ? renderMessageContent(m.content) : renderMarkdown(m.content), cls);
                     });
                     floatingChatMessages.scrollTop = floatingChatMessages.scrollHeight;
                 } else if (data.type === "token") {
@@ -3395,12 +4227,13 @@
                     floatingChatMessages.scrollTop = floatingChatMessages.scrollHeight;
                 } else if (data.type === "result") {
                     if (floatCurrentStatus) { floatCurrentStatus.remove(); floatCurrentStatus = null; }
-                    let html = escapeHtml(data.reply).replace(/\\n/g, "<br>");
+                    let html = renderMarkdown(data.reply);
                     (data.files || []).forEach(f => {
                         const href = f.startsWith("/") ? f : "/" + f;
                         html += `<a class="file-link" href="${href}" target="_blank">📎 ${f.split("/").pop()}</a>`;
                     });
                     if (floatStreamingMsg) {
+                        floatStreamingMsg.style.whiteSpace = "";
                         floatStreamingMsg.innerHTML = html;
                         floatStreamingMsg = null;
                     } else {
@@ -3469,6 +4302,7 @@
         loadUsers().then(() => {
             pollTask();
             loadTaskHistory();
+            loadProjectChannels();
             // 用户列表加载完成后，如果 WebSocket 已连接，补发握手恢复历史
             if (ws && ws.readyState === WebSocket.OPEN) {
                 const userId = userSelect.value || "web_user";
