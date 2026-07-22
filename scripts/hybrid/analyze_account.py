@@ -23,13 +23,29 @@ from pathlib import Path
 from openai import OpenAI
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-ACCOUNTS_PATH = PROJECT_ROOT / "data" / "projects" / "hybrid_accounts.json"
 DATA_DIR = PROJECT_ROOT / "data" / "projects"
+ACCOUNTS_PATHS = [
+    PROJECT_ROOT / "data" / "projects" / "hybrid_accounts.json",
+    PROJECT_ROOT / "data" / "projects" / "wechat_accounts.json",
+    PROJECT_ROOT / "data" / "projects" / "feishu_accounts.json",
+    PROJECT_ROOT / "data" / "projects" / "dingtalk_accounts.json",
+]
 
 
 def load_accounts():
-    with open(ACCOUNTS_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    merged = {"accounts": {}}
+    for path in ACCOUNTS_PATHS:
+        if not path.exists():
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for name, config in (data.get("accounts") or {}).items():
+                if name not in merged["accounts"]:
+                    merged["accounts"][name] = config
+        except Exception as e:
+            print(f"[warn] 读取账户配置失败 {path}: {e}", file=sys.stderr)
+    return merged
 
 
 def sanitize(name: str) -> str:
@@ -62,7 +78,7 @@ def main():
     accounts = load_accounts()
     account_config = accounts.get("accounts", {}).get(args.account)
     if not account_config:
-        print(f"错误：找不到账户 {args.account}，请检查 {ACCOUNTS_PATH}", file=sys.stderr)
+        print(f"错误：找不到账户 {args.account}，请检查 data/projects/*_accounts.json", file=sys.stderr)
         sys.exit(1)
 
     safe_account = sanitize(args.account)

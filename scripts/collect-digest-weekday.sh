@@ -4,9 +4,21 @@
 
 set -e
 
-PROJECT_ROOT="/Users/cpp/sales-mind"
+# 从脚本自身位置推导项目根目录（兼容目录改名/迁移）
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# 加载环境变量
+if [ -f "$PROJECT_ROOT/.env" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$PROJECT_ROOT/.env"
+  set +a
+fi
+
 SKILL_DIR="$PROJECT_ROOT/third_party/wechat-digest-skill"
 PY="$PROJECT_ROOT/venv/bin/python"
+[ -x "$PY" ] || PY="/Users/cpp/xiaoxiao/venv/bin/python"
+[ -x "$PY" ] || PY="python3"
 
 # 最近 7 天
 SINCE=$(date -v-7d +%Y-%m-%d)
@@ -43,5 +55,19 @@ echo "[$(date)] 开始提取销售线索"
 
 echo "[$(date)] 生成离线工作台"
 "$PY" kb.py export-html 2>&1 | tail -5
+
+echo "[$(date)] 同步到销销知识库"
+set +e
+SYNC_OUTPUT=$(PYTHONPATH="$PROJECT_ROOT" "$PY" -m mind.wechat_digest sync 2>&1)
+SYNC_STATUS=$?
+set -e
+if [ $SYNC_STATUS -eq 0 ]; then
+  echo "$SYNC_OUTPUT" | tail -5
+  echo "[$(date)] 同步完成"
+else
+  echo "[$(date)] 同步失败: 本地 LM Studio 未启动（:1234）或 embedding 模型未加载。"
+  echo "         Agent 仍会通过 knowledge_base.json 离线读取资讯看板内容。"
+  echo "$SYNC_OUTPUT" | tail -3
+fi
 
 echo "[$(date)] 完成"

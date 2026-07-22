@@ -47,9 +47,12 @@ def parse_create_time(t: str) -> datetime:
 
 
 def pull_group(open_conversation_id: str, since: Optional[str] = None, limit: int = 100):
-    """拉取单个群的消息，自动翻页，返回消息列表（按时间倒序）。"""
+    """拉取单个群的消息，自动翻页，返回消息列表（按时间倒序）。
+
+    使用 --direction newer 从 since 往现在拉，确保增量更新能拿到最新消息。
+    """
     messages = []
-    time_param = since or (datetime.now(timezone(timedelta(hours=8))) - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+    time_param = since or (datetime.now(timezone(timedelta(hours=8))) - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
     page = 0
     while True:
         page += 1
@@ -58,7 +61,7 @@ def pull_group(open_conversation_id: str, since: Optional[str] = None, limit: in
                 "chat", "message", "list",
                 "--group", open_conversation_id,
                 "--time", time_param,
-                "--direction", "older",
+                "--direction", "newer",
                 "--limit", str(limit),
             ])
         except subprocess.CalledProcessError as e:

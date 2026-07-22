@@ -9,12 +9,14 @@ import { searchWebTool } from "./searchWeb.ts";
 
 import { createTodoTool, createPlanTool } from "./todoTools.ts";
 
-import { readFeishuMessagesTool } from "./readFeishuMessages.ts";
 import { readDingtalkMessagesTool } from "./readDingtalkMessages.ts";
+import { readFeishuMessagesTool } from "./readFeishuMessages.ts";
+import { readWechatMessagesTool } from "./readWechatMessages.ts";
 
 import { readDocumentTool } from "./readDocument.ts";
 import { readFileTool } from "./readFile.ts";
 import { writeFileTool } from "./writeFile.ts";
+import { runProjectLifecycleReviewTool } from "./runProjectLifecycleReview.ts";
 
 export function createTools(userId: string): AgentTool[] {
   return [
@@ -22,6 +24,7 @@ export function createTools(userId: string): AgentTool[] {
     getNewsDigestTool,
     readFeishuMessagesTool,
     readDingtalkMessagesTool,
+    readWechatMessagesTool,
     searchWebTool,
     fetchWebpageTool,
     browseOpenTool,
@@ -30,6 +33,7 @@ export function createTools(userId: string): AgentTool[] {
     readFileTool,
     readDocumentTool,
     writeFileTool,
+    runProjectLifecycleReviewTool,
     createTodoTool(userId),
     createPlanTool(userId),
     ...createDbTools(userId),

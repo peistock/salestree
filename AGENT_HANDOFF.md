@@ -3,10 +3,10 @@
 ## 这是什么
 
 销销（SalesMind / Xiaoxiaoshu）是一个面向互联网广告/营销公司销售团队的 AI 协作助手。
-- 主服务：TypeScript Fastify（`server/`，端口 8001，由 `server/.env` 中 `PORT` 控制）
+- 主服务：TypeScript Fastify（`server/`，端口 8002，由 `server/.env` 中 `PORT` 控制）
 - 遗留服务：Python FastAPI（`main.py`，端口 8000/8001，可选）
-- 数据库：PostgreSQL 15 + PGVector（Docker 本地运行，主机端口 5433，容器内 5432）
-- 本地 LLM：LM Studio（默认端口 1234）
+- 数据库：PostgreSQL 15 + PGVector（开发机本地实例，localhost:5432，DB `salesmind`；`docker-compose.yml` 另有一套映射 5433，注意区分）
+- LLM：云端 API —— 主力 Kimi k2.6（`api.kimi.com/coding/v1`），fallback Agnes `agnes-2.0-flash`；已不依赖本地 LM Studio
 - 管理后台：Streamlit（端口 8501）
 
 原始项目路径：`/Users/peter/salestree`
@@ -57,11 +57,10 @@ cd salestree
 
 ### 2. 安装系统依赖
 
-- Docker Desktop（跑 PostgreSQL）
+- Docker Desktop（可选，跑 PostgreSQL；开发机也可直接用本地 PostgreSQL）
 - Python 3.11+
 - Node.js 18+（TS 服务依赖）
 - FFmpeg：`brew install ffmpeg`
-- LM Studio（本地 LLM，默认端口 1234）
 - `cloudflared`（可选，用于固定公网域名）
 
 ### 3. 安装项目依赖
@@ -94,9 +93,10 @@ cp .env.example .env
 
 | 必须配置项 | 说明 |
 |-----------|------|
-| `LLM_BASE_URL` / `LLM_API_KEY` | 默认 LM Studio 本地 `http://127.0.0.1:1234/v1` + `lm-studio`；也可切换 DeepSeek / 百炼 |
-| `MODEL_DAILY` / `MODEL_COMPLEX` / `MODEL_SUMMARY` | 默认 `qwen/qwen3.6-35b-a3b`（LM Studio） |
-| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | 默认 localhost:**5433**，与 `docker-compose.yml` 中 `5433:5432` 映射一致 |
+| `LLM_BASE_URL` / `LLM_API_KEY` | 云端 API，当前主力 Kimi：`https://api.kimi.com/coding/v1` + 对应 key |
+| `LLM_FALLBACK_URLS` / `LLM_FALLBACK_KEYS` / `LLM_FALLBACK_NAMES` / `LLM_FALLBACK_MODELS` | 备选云端 API（当前为 Agnes `agnes-2.0-flash`），故障自动转移 |
+| `MODEL_DAILY` / `MODEL_COMPLEX` / `MODEL_SUMMARY` | 当前均为 `k2.6` |
+| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | 开发机连本地 PostgreSQL：localhost:5432 / cpp / salesmind；若改用 docker-compose 的 PG 则是 5433（`5433:5432` 映射），两者别混 |
 | `SEARXNG_URL` | SearXNG 地址，本地 `http://127.0.0.1:8080`，服务器部署可指向 `https://searxng.peistock.win` |
 | `ADMIN_API_KEY` | **新增**：访问 `/api/admin/*` 用量、配额、用户管理接口的认证密钥 |
 | `REQUIRE_KNOWN_USERS` | **新增**：`true` 时只允许已知活跃用户连接 WS；默认 `false` 自动创建占位用户 |
@@ -105,17 +105,13 @@ cp .env.example .env
 
 ### 5. 启动 PostgreSQL
 
+开发机可直接用本地 PostgreSQL（`server/.env` 当前指向 localhost:5432 / salesmind）。若使用 Docker 版本：
+
 ```bash
 docker-compose up -d db
 ```
 
-启动前检查 5433 端口是否被占用：
-
-```bash
-lsof -i :5433
-```
-
-如果有非 Docker 的 PostgreSQL 进程，先停止，否则销销会连错数据库。
+Docker 版本映射主机 5433 → 容器 5432，启动前检查端口占用：`lsof -i :5433`。注意 `.env` 的 `DB_PORT` 必须与实际要连的实例一致，连错库会出现密码认证失败或数据对不上。
 
 ### 6. 启动服务
 
@@ -126,7 +122,7 @@ cd server
 npm run dev
 ```
 
-访问 `http://localhost:8001/chat`。`server/.env` 中 `PORT` 可修改。
+访问 `http://localhost:8002/chat`（302 跳转到 `/chat.html`）。`server/.env` 中 `PORT` 可修改。
 
 Python 遗留服务（可选，仅当需要旧 API 时启动）：
 
@@ -155,17 +151,17 @@ streamlit run dashboard.py --server.port 8501
 
 1. **数据延续性**
    - `data/uploads/`（客户文件、生成的 HTML 方案）**不进 git**，新机器需要单独迁移或重新生成。
-   - PostgreSQL 数据在 Docker 卷里，不会随仓库迁移。如需保留，需要单独导出/导入：
+   - PostgreSQL 数据不随仓库迁移。如需保留，需要单独导出/导入（按实际实例执行，Docker 版示例）：
      ```bash
-     # 旧机器导出
-     docker exec salesmind-db-1 pg_dump -U family salesmind > salesmind.sql
+     # 旧机器导出（用户按 .env 的 DB_USER，当前为 cpp）
+     docker exec salesmind-db-1 pg_dump -U cpp salesmind > salesmind.sql
      # 新机器导入
-     docker exec -i salesmind-db-1 psql -U family salesmind < salesmind.sql
+     docker exec -i salesmind-db-1 psql -U cpp salesmind < salesmind.sql
      ```
 
-2. **本地 LLM 必须可用**
-   - 默认依赖 LM Studio 本地模型 `qwen/qwen3.6-35b-a3b`，端口 1234。
-   - 如果新机器没有 GPU/内存不足，可在 `.env` 切到 DeepSeek / 百炼 API。
+2. **LLM API key 必须可用**
+   - LLM 已全部上云：主力 Kimi k2.6，fallback Agnes。`.env` 中 `LLM_API_KEY`（及 fallback key）必须有效。
+   - 多人并发不再是瓶颈，约束变为 API 账号限流额度与 token 成本（`llm_usage` 表按组织计量）。
 
 3. **数据库 schema 会演进**
    - `init.sql` 已包含商业化改造新增的 `organizations`、`llm_usage` 等表。
@@ -187,7 +183,7 @@ streamlit run dashboard.py --server.port 8501
 ## 如何继续开发
 
 ```bash
-cd /Users/peter/salestree
+cd /Users/cpp/salestree
 claude
 ```
 
@@ -195,4 +191,4 @@ Claude Code 会自动读取 `CLAUDE.md` 和 `README.md` 获取项目上下文。
 
 ---
 
-*更新日期：2026-07-20*
+*更新日期：2026-07-21*

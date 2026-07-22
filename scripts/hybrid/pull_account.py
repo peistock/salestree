@@ -29,6 +29,7 @@ LARK_CLI = os.environ.get(
     "LARK_CLI",
     os.path.expanduser("~/.nvm/versions/node/v20.20.0/bin/lark-cli"),
 )
+WX_CLI_BIN = os.environ.get("WX_CLI_BIN", "wx")
 
 
 def load_accounts():
@@ -45,6 +46,79 @@ def run_dws(args: list) -> dict:
     print(f"[dws] {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     return json.loads(result.stdout)
+
+
+def run_wx_cli(args: list, timeout: int = 300) -> dict:
+    cmd = [WX_CLI_BIN] + args
+    print(f"[wx] {' '.join(cmd)}")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+    except FileNotFoundError as e:
+        raise RuntimeError(f"找不到 wx: {WX_CLI_BIN}。请确认已安装并加入 PATH，或通过 WX_CLI_BIN 环境变量指定。") from e
+    if result.returncode != 0:
+        raise RuntimeError(f"wx 执行失败 (code={result.returncode}): {result.stderr or result.stdout}")
+    text = result.stdout.strip()
+    if not text:
+        return {}
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError:
+            continue
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"无法解析 wx 输出: {e}\n{text[:500]}") from e
+
+
+def pull_wechat_group(chat_name: str, since: Optional[str] = None, until: Optional[str] = None, limit: int = 500) -> list:
+    """拉取单个微信群的消息，返回消息列表（按时间倒序）。
+
+    jackwener/wx 的 `history` 命令：
+        wx history <CHAT> --since YYYY-MM-DD --until YYYY-MM-DD -n <LIMIT> --json
+    返回消息字段：local_id, sender, content, time, timestamp, type
+    """
+    args = ["history", chat_name, "--json"]
+    if since:
+        args.extend(["--since", since])
+    if until:
+        args.extend(["--until", until])
+    if limit:
+        args.extend(["-n", str(limit)])
+
+    data = run_wx_cli(args)
+    messages = data if isinstance(data, list) else (data.get("messages") or data.get("data", {}).get("messages", []) or [])
+    if not isinstance(messages, list):
+        print(f"  wx 返回的消息格式异常: {type(messages)}", file=sys.stderr)
+        return []
+
+    normalized = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        create_time = msg.get("time") or ""
+        sender_name = msg.get("sender") or "未知"
+        content = msg.get("content") or ""
+        msg_id = str(msg.get("local_id") or "")
+
+        normalized.append({
+            "message_id": msg_id,
+            "create_time": create_time,
+            "createTime": create_time,
+            "sender": {"name": sender_name, "id": sender_name},
+            "sender_name": sender_name,
+            "content": content,
+            "source": "wechat",
+            "chat_name": chat_name,
+            "chat_type": "group",
+            "msg_type": msg.get("type", ""),
+            "timestamp": msg.get("timestamp"),
+            "raw": msg,
+        })
+    return normalized
 
 
 def pull_dingtalk_group(open_conversation_id: str, cutoff: Optional[datetime] = None, limit: int = 100) -> List[dict]:
@@ -170,12 +244,11 @@ def load_existing_messages(account: str) -> List[dict]:
         return []
 
 
-def infer_dingtalk_cutoff(existing_messages: List[dict]) -> Optional[datetime]:
+def infer_cutoff(existing_messages: List[dict]) -> Optional[datetime]:
+    """从已有消息里找最新的时间，作为增量拉取起点。"""
     times = []
     for m in existing_messages:
-        if m.get("source") != "dingtalk":
-            continue
-        t = m.get("createTime")
+        t = m.get("createTime") or m.get("create_time", "")
         if t:
             try:
                 times.append(datetime.strptime(t, "%Y-%m-%d %H:%M:%S"))
@@ -201,12 +274,12 @@ def main():
         sys.exit(1)
 
     existing = [] if args.full else load_existing_messages(args.account)
-    cutoff = None if args.full else infer_dingtalk_cutoff(existing)
+    cutoff = None if args.full else infer_cutoff(existing)
     if not cutoff and not args.full:
         cutoff = (datetime.now(timezone(timedelta(hours=8))) - timedelta(days=7)).replace(tzinfo=None)
-        print(f"[info] 无历史钉钉消息，默认拉取最近 7 天: {cutoff.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"[info] 无历史消息，默认拉取最近 7 天: {cutoff.strftime('%Y-%m-%d %H:%M:%S')}")
     elif cutoff:
-        print(f"[info] 钉钉增量起点: {cutoff.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"[info] 增量起点: {cutoff.strftime('%Y-%m-%d %H:%M:%S')}")
 
     tmp_dir = Path(args.tmp_dir or f"/tmp/hybrid_{sanitize(args.account)}")
     tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -224,14 +297,18 @@ def main():
             elif source == "feishu":
                 feishu_tmp = tmp_dir / f"{sanitize(chat_name)}.json"
                 batch = pull_feishu_group(group_id, feishu_tmp)
+            elif source == "wechat":
+                since_str = cutoff.strftime("%Y-%m-%d") if cutoff else None
+                until_str = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
+                batch = pull_wechat_group(chat_name, since=since_str, until=until_str, limit=500)
             else:
                 print(f"  未知来源: {source}，跳过", file=sys.stderr)
                 continue
         except subprocess.CalledProcessError as e:
             print(f"  拉取失败: {e.stderr or e.stdout}", file=sys.stderr)
             continue
-        except FileNotFoundError as e:
-            print(f"  工具缺失: {e}", file=sys.stderr)
+        except (subprocess.TimeoutExpired, RuntimeError, FileNotFoundError) as e:
+            print(f"  拉取失败: {e}", file=sys.stderr)
             continue
 
         for msg in batch:

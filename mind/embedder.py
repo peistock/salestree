@@ -13,7 +13,7 @@ from sentence_transformers import SentenceTransformer
 logger = logging.getLogger(__name__)
 
 MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
-DIMENSION = 512
+DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "768"))
 
 # OpenAI 兼容 embeddings API 配置（例如 LM Studio 的 /v1/embeddings）
 EMBEDDING_BASE_URL = os.getenv("EMBEDDING_BASE_URL", "").strip()

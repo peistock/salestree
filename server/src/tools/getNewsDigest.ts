@@ -1,9 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { Static } from "@earendil-works/pi-ai";
 import { config } from "../config.ts";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const getNewsDigestSchema = Type.Object({
   focus: Type.Optional(Type.String({ description: "可选：聚焦某个客户/主题/账号，例如'快手'、'小红书'、'抖音'", default: "" })),
@@ -51,8 +55,8 @@ interface KnowledgeBase {
 
 function findLatestKnowledgeBasePath(): string | null {
   const outputDir = path.resolve(
-    path.dirname(new URL(import.meta.url).pathname),
-    "../",
+    __dirname,
+    "../../",
     config.wechatKbOutputDir,
   );
   if (!fs.existsSync(outputDir)) return null;

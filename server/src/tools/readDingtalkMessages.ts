@@ -23,7 +23,7 @@ interface MessagesFile {
 function loadMessages(account: string): MessagesFile | null {
   const baseDir = path.resolve(
     path.dirname(new URL(import.meta.url).pathname),
-    "../../",
+    "../../..",
     "data/projects",
   );
   if (!fs.existsSync(baseDir)) return null;

@@ -19,6 +19,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from mind.llm_client import chat
+from mind.encryption import encrypt_api_key, decrypt_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,29 @@ def get_conn():
     )
 
 
+def _encrypt_llm_config(config: Optional[dict]) -> Optional[dict]:
+    """加密 llm_config 中的 apiKey。"""
+    if not config:
+        return config
+    cfg = dict(config)
+    if cfg.get("apiKey"):
+        cfg["apiKey"] = encrypt_api_key(cfg["apiKey"])
+    return cfg
+
+
+def _decrypt_llm_config(config: Optional[dict]) -> Optional[dict]:
+    """解密 llm_config 中的 apiKey。"""
+    if not config:
+        return config
+    cfg = dict(config)
+    if cfg.get("apiKey"):
+        try:
+            cfg["apiKey"] = decrypt_api_key(cfg["apiKey"])
+        except Exception as e:
+            logger.warning(f"llm_config apiKey 解密失败: {e}")
+    return cfg
+
+
 def init_db():
     """初始化数据库"""
     conn = get_conn()
@@ -59,7 +83,9 @@ def init_db():
             ADD COLUMN IF NOT EXISTS team_id TEXT DEFAULT NULL,
             ADD COLUMN IF NOT EXISTS wechat_user_id TEXT DEFAULT NULL,
             ADD COLUMN IF NOT EXISTS org_id TEXT DEFAULT 'org_default',
-            ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+            ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active',
+            ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS llm_config JSONB DEFAULT '{}';
         """)
         c.execute("""
             CREATE INDEX IF NOT EXISTS idx_user_profiles_org
@@ -1110,6 +1136,44 @@ class Memory:
                 c.execute("SELECT * FROM accounts ORDER BY updated_at DESC LIMIT %s", (limit,))
             return c.fetchall()
 
+    def delete_account(self, account_id: str) -> bool:
+        """删除客户公司，级联删除联系人、商机和相关活动记录"""
+        try:
+            with self.conn.cursor() as c:
+                # 删除关联活动记录
+                c.execute("DELETE FROM activities WHERE entity_type = 'account' AND entity_id = %s", (account_id,))
+                # contacts 和 deals 已通过 ON DELETE CASCADE 自动删除
+                c.execute("DELETE FROM accounts WHERE account_id = %s", (account_id,))
+                self.conn.commit()
+            return True
+        except Exception as e:
+            logger.warning(f"删除客户失败: {e}")
+            return False
+
+    def update_account(self, account_id: str, **kwargs) -> bool:
+        """更新客户公司信息，只更新非 None 字段"""
+        try:
+            allowed_fields = {"name", "industry", "website", "stage", "owner_id", "annual_revenue_band", "employee_count_band", "region", "notes", "research_summary"}
+            fields = []
+            values = []
+            for k, v in kwargs.items():
+                if k in allowed_fields and v is not None:
+                    fields.append(f"{k} = %s")
+                    values.append(v)
+            if not fields:
+                return False
+            values.append(account_id)
+            with self.conn.cursor() as c:
+                c.execute(
+                    f"UPDATE accounts SET {', '.join(fields)}, updated_at = NOW() WHERE account_id = %s",
+                    tuple(values)
+                )
+                self.conn.commit()
+                return c.rowcount > 0
+        except Exception as e:
+            logger.warning(f"更新客户失败: {e}")
+            return False
+
     def create_contact(self, contact_id: str, account_id: str, name: str, **kwargs) -> bool:
         """创建联系人"""
         try:
@@ -1887,19 +1951,22 @@ def create_user(
     org_id: str = "org_default",
     team_id: str = None,
     wechat_user_id: str = None,
+    is_admin: bool = False,
+    llm_config: Optional[dict] = None,
 ) -> bool:
     """创建用户，user_id 已存在则返回 False"""
+    encrypted_config = _encrypt_llm_config(llm_config)
     conn = get_conn()
     try:
         with conn.cursor() as c:
             c.execute(
                 """
                 INSERT INTO user_profiles
-                (user_id, name, role, entity_type, org_id, team_id, wechat_user_id, status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'active')
+                (user_id, name, role, entity_type, org_id, team_id, wechat_user_id, status, is_admin, llm_config)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'active', %s, %s)
                 ON CONFLICT (user_id) DO NOTHING
                 """,
-                (user_id, name, role, entity_type, org_id, team_id, wechat_user_id)
+                (user_id, name, role, entity_type, org_id, team_id, wechat_user_id, is_admin, json.dumps(encrypted_config) if encrypted_config else '{}')
             )
             conn.commit()
             return c.rowcount > 0
@@ -1911,10 +1978,13 @@ def update_user(
     user_id: str,
     name: str = None,
     role: str = None,
+    entity_type: str = None,
+    is_admin: bool = None,
     org_id: str = None,
     team_id: str = None,
     wechat_user_id: str = None,
     status: str = None,
+    llm_config: Optional[dict] = None,
 ) -> bool:
     """更新用户信息，只更新非 None 字段"""
     fields = []
@@ -1925,6 +1995,12 @@ def update_user(
     if role is not None:
         fields.append("role = %s")
         values.append(role)
+    if entity_type is not None:
+        fields.append("entity_type = %s")
+        values.append(entity_type)
+    if is_admin is not None:
+        fields.append("is_admin = %s")
+        values.append(is_admin)
     if org_id is not None:
         fields.append("org_id = %s")
         values.append(org_id)
@@ -1937,6 +2013,10 @@ def update_user(
     if status is not None:
         fields.append("status = %s")
         values.append(status)
+    if llm_config is not None:
+        fields.append("llm_config = %s")
+        encrypted_config = _encrypt_llm_config(llm_config)
+        values.append(json.dumps(encrypted_config) if encrypted_config else '{}')
     if not fields:
         return False
 
@@ -1963,8 +2043,9 @@ def get_user_full(user_id: str) -> Optional[dict]:
         with conn.cursor(cursor_factory=RealDictCursor) as c:
             c.execute(
                 """
-                SELECT u.user_id, u.name, u.role, u.entity_type, u.org_id,
+                SELECT u.user_id, u.name, u.role, u.entity_type, u.is_admin, u.org_id,
                        u.team_id, u.wechat_user_id, u.status, u.created_at, u.updated_at,
+                       u.llm_config,
                        o.name AS org_name
                 FROM user_profiles u
                 LEFT JOIN organizations o ON o.org_id = u.org_id
@@ -1973,7 +2054,11 @@ def get_user_full(user_id: str) -> Optional[dict]:
                 (user_id,)
             )
             row = c.fetchone()
-            return dict(row) if row else None
+            if not row:
+                return None
+            user = dict(row)
+            user["llm_config"] = _decrypt_llm_config(user.get("llm_config") or {})
+            return user
     finally:
         conn.close()
 
@@ -1986,8 +2071,9 @@ def list_users_full(active_only: bool = False) -> List[dict]:
             where = "WHERE u.status = 'active'" if active_only else ""
             c.execute(
                 f"""
-                SELECT u.user_id, u.name, u.role, u.entity_type, u.org_id,
+                SELECT u.user_id, u.name, u.role, u.entity_type, u.is_admin, u.org_id,
                        u.team_id, u.wechat_user_id, u.status, u.created_at, u.updated_at,
+                       u.llm_config,
                        o.name AS org_name
                 FROM user_profiles u
                 LEFT JOIN organizations o ON o.org_id = u.org_id
@@ -1995,7 +2081,10 @@ def list_users_full(active_only: bool = False) -> List[dict]:
                 ORDER BY u.created_at DESC
                 """
             )
-            return c.fetchall()
+            rows = c.fetchall()
+            for user in rows:
+                user["llm_config"] = _decrypt_llm_config(user.get("llm_config") or {})
+            return rows
     finally:
         conn.close()
 

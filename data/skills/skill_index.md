@@ -11,6 +11,7 @@
 | account-marketing | 客户营销触点研究：品牌、渠道、内容、投放、KOL、社媒 | WebSearch/WebFetch |
 | sales-coach | 销售教练：模拟拜访/电话/异议处理，AI 当客户或销售，实时纠偏 | — |
 | marketing-plan | 整合营销方案：基于客户背景输出营销策略与执行计划 | WebSearch/WebFetch |
+| project-lifecycle-review | 项目全周期复盘：从群聊记录提炼阶段目标、策略、成果与挑战 | run_project_lifecycle_review |
 | guizang-html-deck | 高质感网页 PPT：基于 guizang-ppt-skill 生成横向翻页单文件 HTML deck | — |
 | news-digest | 行业资讯库检索与客户分享：基于 wechat-digest 知识库生成可转发文案 | 向量知识库 |
 | 纵横分析法skill | 横纵分析法深度研究（Khazix版），产出PDF报告 | WebSearch/WebFetch |

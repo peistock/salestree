@@ -44,4 +44,5 @@ export const config = {
     apiKey: process.env.ADMIN_API_KEY ?? "",
   },
   requireKnownUsers: process.env.REQUIRE_KNOWN_USERS === "true",
+  userLlmEncryptionKey: process.env.USER_LLM_ENCRYPTION_KEY ?? "",
 };

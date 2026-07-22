@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS knowledge_embeddings (
     doc_id INTEGER REFERENCES knowledge_docs(id) ON DELETE CASCADE,
     chunk_index INTEGER NOT NULL,
     chunk_text TEXT NOT NULL,
-    embedding vector(512),
+    embedding vector(768),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -110,7 +110,8 @@ ALTER TABLE user_profiles
     ADD COLUMN IF NOT EXISTS writing_patterns JSONB DEFAULT '{}',
     ADD COLUMN IF NOT EXISTS entity_type TEXT DEFAULT 'user',
     ADD COLUMN IF NOT EXISTS team_id TEXT DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS wechat_user_id TEXT DEFAULT NULL;
+    ADD COLUMN IF NOT EXISTS wechat_user_id TEXT DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS llm_config JSONB DEFAULT '{}';
 
 -- 创作空间
 CREATE TABLE IF NOT EXISTS creation_workspace (
@@ -252,28 +253,8 @@ INSERT INTO user_profiles (user_id, name, role, preferences, entity_type, team_i
     ('sales_002', '王芳', '客户经理', '详细完整，关注客户关系', 'sales', 'team_a')
 ON CONFLICT (user_id) DO NOTHING;
 
-INSERT INTO accounts (account_id, name, industry, website, stage, owner_id, region, notes) VALUES
-    ('acc_kuaishou', '快手', '互联网/短视频', 'https://www.kuaishou.com', 'qualified', 'sales_001', '北京', '港股上市公司，短视频和直播广告投放需求大'),
-    ('acc_xiaohongshu', '小红书', '互联网/内容社区', 'https://www.xiaohongshu.com', 'prospect', 'sales_001', '上海', '种草营销、KOL 合作潜在需求'),
-    ('acc_bytedance', '字节跳动', '互联网/综合', 'https://www.bytedance.com', 'closed-won', 'sales_002', '北京', '已合作效果广告年度框架')
-ON CONFLICT (account_id) DO NOTHING;
-
-INSERT INTO contacts (contact_id, account_id, name, title, department, role_in_deal, email, notes) VALUES
-    ('ct_kuaishou_1', 'acc_kuaishou', '张总', '市场总监', '市场部', 'decision', 'zhang@kuaishou.com', '关注 ROI 和案例'),
-    ('ct_kuaishou_2', 'acc_kuaishou', '刘经理', '效果广告负责人', '增长部', 'user', 'liu@kuaishou.com', '关注投放技术和数据对接'),
-    ('ct_xiaohongshu_1', 'acc_xiaohongshu', '陈总监', '品牌合作负责人', '商业化', 'budget', 'chen@xiaohongshu.com', '关注 KOL 资源和内容质量')
-ON CONFLICT (contact_id) DO NOTHING;
-
-INSERT INTO deals (deal_id, account_id, owner_id, name, stage, service_line, expected_value, next_step) VALUES
-    ('deal_kuaishou_2026', 'acc_kuaishou', 'sales_001', '快手 Q3 效果广告投放', 'proposal', 'performance-ads', 1500000, '周四前提交方案'),
-    ('deal_xiaohongshu_kol', 'acc_xiaohongshu', 'sales_001', '小红书 KOL 种草campaign', 'qualification', 'kol', 800000, '约陈总监下周沟通预算')
-ON CONFLICT (deal_id) DO NOTHING;
-
-INSERT INTO activities (activity_id, entity_type, entity_id, owner_id, activity_type, direction, content, sentiment) VALUES
-    ('act_kuaishou_1', 'account', 'acc_kuaishou', 'sales_001', 'meeting', 'outbound', '与张总、刘经理开会，讨论 Q3 投放目标和 KPI', 'positive'),
-    ('act_kuaishou_2', 'contact', 'ct_kuaishou_1', 'sales_001', 'email', 'outbound', '发送案例集和报价单', 'neutral'),
-    ('act_xiaohongshu_1', 'account', 'acc_xiaohongshu', 'sales_001', 'call', 'outbound', '与陈总监初步沟通 KOL 合作模式', 'positive')
-ON CONFLICT (activity_id) DO NOTHING;
+-- 注：accounts/contacts/deals/activities 不再预置演示数据（2026-07-21 移除），
+-- 演示数据会污染 Agent 记忆上下文。真实客户由销售手动录入。
 
 -- ========== 商业化：组织与 LLM 用量计量 ==========
 
@@ -344,3 +325,27 @@ CREATE TRIGGER trg_organizations_updated_at
     BEFORE UPDATE ON organizations
     FOR EACH ROW
     EXECUTE FUNCTION update_org_updated_at();
+
+-- ========== 共享项目频道 ==========
+ALTER TABLE conversation_threads
+    ADD COLUMN IF NOT EXISTS project_name TEXT DEFAULT NULL;
+
+-- 每个项目至多一个共享频道；部分唯一索引同时解决并发 find-or-create 竞争
+CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_project_name
+    ON conversation_threads(project_name) WHERE project_name IS NOT NULL;
+
+-- 频道历史按 thread 读取（不再按 user_id 过滤）
+CREATE INDEX IF NOT EXISTS idx_episodic_memory_thread
+    ON episodic_memory(thread_id, created_at ASC);
+
+-- ========== 自定义频道：成员与关联项目 ==========
+ALTER TABLE conversation_threads
+    ADD COLUMN IF NOT EXISTS linked_project TEXT DEFAULT NULL;
+
+CREATE TABLE IF NOT EXISTS channel_members (
+    thread_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    added_by TEXT DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (thread_id, user_id)
+);

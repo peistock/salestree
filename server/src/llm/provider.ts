@@ -33,9 +33,20 @@ interface ProviderConfig {
   modelId: string;
 }
 
+export interface UserLlmConfig {
+  enabled?: boolean;
+  provider?: string;
+  baseUrl?: string;
+  apiKey?: string;
+  modelDaily?: string;
+  modelComplex?: string;
+  modelSummary?: string;
+}
+
 function pickProviderId(baseUrl: string): string {
   if (baseUrl.includes("agnes-ai")) return "agnes";
   if (baseUrl.includes("kimi")) return "kimi";
+  if (baseUrl.includes("deepseek")) return "deepseek";
   return "custom";
 }
 
@@ -418,14 +429,22 @@ function openAiStreamingStreamFn(
   return output;
 }
 
-function buildProviderConfigs(): ProviderConfig[] {
-  const primary: ProviderConfig = {
-    id: "primary",
-    name: "primary",
-    baseUrl: config.llm.baseUrl ?? "http://127.0.0.1:1234/v1",
-    apiKey: config.llm.apiKey,
-    modelId: config.llm.modelDaily,
-  };
+function buildProviderConfigs(userConfig?: UserLlmConfig): ProviderConfig[] {
+  const primary: ProviderConfig = (userConfig?.enabled && userConfig.baseUrl && userConfig.apiKey && userConfig.modelDaily)
+    ? {
+        id: "user_primary",
+        name: userConfig.provider || "user",
+        baseUrl: userConfig.baseUrl.replace(/\/$/, ""),
+        apiKey: userConfig.apiKey,
+        modelId: userConfig.modelDaily,
+      }
+    : {
+        id: "primary",
+        name: "primary",
+        baseUrl: config.llm.baseUrl ?? "http://127.0.0.1:1234/v1",
+        apiKey: config.llm.apiKey,
+        modelId: config.llm.modelDaily,
+      };
   const configs: ProviderConfig[] = [primary];
 
   const n = Math.max(config.llm.fallbackUrls.length, config.llm.fallbackKeys.length);
@@ -555,8 +574,10 @@ function createFailoverStreamFn(
   };
 }
 
-export function createLlmModel(): { models: Models; model: Model<"openai-completions">; streamFn: StreamFn } {
-  const providerConfigs = buildProviderConfigs();
+export function createLlmModel(
+  userConfig?: UserLlmConfig,
+): { models: Models; model: Model<"openai-completions">; streamFn: StreamFn } {
+  const providerConfigs = buildProviderConfigs(userConfig);
   const models = createModels();
   const modelOrder: Model<Api>[] = [];
   const apiKeys = new Map<string, string>();

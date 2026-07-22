@@ -142,37 +142,108 @@ def main():
     )
     model = args.model or os.getenv("MODEL_DAILY", "k2.6")
 
-    prompt = f"""你是 B2B 销售情报分析专家。请根据下面客户相关的钉钉群消息，为销售团队提炼结构化情报。
+    def clean_json_text(text: str) -> str:
+        text = text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        return text.strip()
 
-该客户涉及多个群：客户群（可能分为投放群、素材对接群等）和内部协同群。请先分别整理，再交叉验证。
+    def llm_json(system: str, user: str, max_tokens: int = 8000) -> dict:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=1,
+            max_tokens=max_tokens,
+        )
+        raw = resp.choices[0].message.content or ""
+        print(f"[llm] finish_reason={resp.choices[0].finish_reason} usage={resp.usage} raw_len={len(raw)}")
+        text = clean_json_text(raw)
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            debug_path = DATA_DIR / f"{safe_account}_analysis_raw_{datetime.now().strftime('%H%M%S')}.txt"
+            with open(debug_path, "w", encoding="utf-8") as f:
+                f.write(text)
+            print(f"[error] JSON 解析失败: {e}", file=sys.stderr)
+            print(f"[debug] 原始输出已保存到 {debug_path}", file=sys.stderr)
+            sys.exit(1)
+
+    # Step 1a: 客户群分群摘要
+    customer_prompt = f"""你是 B2B 销售情报分析专家。请根据下面的客户群消息，为每个客户群生成简洁摘要。
+
+## 要求
+- 必须按群分述，**每个群一个独立的一级标题（# / ##）**，标题用群名。
+- 每个群下按话题组织，每个话题一句话，包含「时间 + 参与者 + 核心内容 + 关键原话」。
+- 每个群摘要控制在 200 字以内，整体输出简洁。
+
+## 输出格式
+必须严格输出以下 JSON，不要加任何额外解释：
+
+{{
+  "customer_group_summary": "客户群关键内容。按群/话题组织。"
+}}
+
+## 客户群消息
+{customer_context}
+"""
+
+    customer_part = llm_json(
+        "你是 B2B 销售情报分析助手，擅长从钉钉群聊中提炼客户动态。",
+        customer_prompt,
+        max_tokens=8000,
+    )
+
+    # Step 1b: 内部群分群摘要
+    internal_prompt = f"""你是 B2B 销售情报分析专家。请根据下面的内部群消息，为每个内部群生成简洁摘要。
+
+## 要求
+- 必须按群分述，**每个群一个独立的一级标题（# / ##）**，标题用群名。
+- 每个群下按话题组织，每个话题一句话，包含「时间 + 参与者 + 核心内容 + 关键原话」。
+- 每个群摘要控制在 200 字以内，整体输出简洁。
+
+## 输出格式
+必须严格输出以下 JSON，不要加任何额外解释：
+
+{{
+  "internal_group_summary": "内部群关键内容。按群/话题组织。"
+}}
+
+## 内部群消息
+{internal_context}
+"""
+
+    internal_part = llm_json(
+        "你是 B2B 销售情报分析助手，擅长从钉钉群聊中提炼内部协同动态。",
+        internal_prompt,
+        max_tokens=8000,
+    )
+
+    # Step 2: 基于摘要与原始消息生成交叉验证、信号、待办、洞察
+    details_prompt = f"""你是 B2B 销售情报分析专家。请基于以下已整理的客户群/内部群摘要与原始消息，提炼整体摘要、交叉验证、关键信号、待办事项与销售洞察。
 
 ## 分析要求
-
-1. **分群整理（必须分群，不要合并）**：分别输出「客户群关键内容」和「内部群关键内容」。
-   - 客户群摘要 `customer_group_summary` 中，**每个群一个独立的一级标题（# / ##）**，标题用群名，如「# 千问拉新-头条-海南亿科」「# 千问拉活-头条-亿科」「# 【拉重装】千问-头条-亿科」。
-   - 不同群的内容严禁混在一个标题下；每个群内部再按话题组织。
-   - 内部群同理，每个内部群一个独立标题。
-   - 每个话题包含「时间 + 参与者 + 核心内容 + 关键原话」。
-2. **话题粒度**：每个群按话题组织，每个话题包含「时间 + 参与者 + 核心内容 + 关键原话」。
-3. **交叉验证**：把客户群提出的每一条「要求 / 问题 / 风险 / deadline」，拿到内部群里找响应。
+1. **整体摘要**：200 字内概括本周期客户与内部的总体动态。
+2. **交叉验证**：把客户群提出的每一条「要求 / 问题 / 风险 / deadline」，拿到内部群里找响应。
    - 已响应：内部群有明确执行人、方案或闭环
    - 部分响应：有回应但无最终闭环
    - 未响应：内部群完全没有提到
    对「未响应」和「部分响应」要重点标出，并提醒销售跟进。
-4. **信号提取**：从两边聊天中提炼 5-10 条关键信号，类型包括：客户动态、内部协同、待办、风险、机会。
-5. **待办事项**：列出销售需要直接跟进的事项，按紧急程度排序。
-6. **销售洞察**：给出 200 字内的洞察和建议，指出销售该主动介入的点。
+3. **信号提取**：最多提炼 5 条关键信号，类型包括：客户动态、内部协同、待办、风险、机会。
+4. **待办事项**：列出销售需要直接跟进的事项，最多 5 条，按紧急程度排序，每条不超过 80 字。
+5. **销售洞察**：给出 150 字内的洞察和建议，指出销售该主动介入的点。
 
 ## 输出格式
-
 必须严格输出以下 JSON，不要加任何额外解释：
 
 {{
-  "account_name": "{args.account}",
-  "date_range": "{date_range_str}",
   "summary": "整体动态摘要（200字内）",
-  "customer_group_summary": "客户群关键内容。按话题/子群组织，保留关键原话和发言人。",
-  "internal_group_summary": "内部群关键内容。按话题组织，保留关键原话和发言人。",
   "cross_reference": [
     {{
       "customer_requirement": "客户群提出的具体requirement / 问题 / 风险",
@@ -189,41 +260,38 @@ def main():
     }}
   ],
   "action_items": ["销售需要跟进的事项"],
-  "insights": "对销售的洞察和建议（200字内）"
+  "insights": "对销售的洞察和建议（150字内）"
 }}
 
-## 消息内容
+## 已整理的群摘要
 
-【客户群消息】
-{customer_context}
+客户群摘要：
+{customer_part.get("customer_group_summary", "")}
 
-【内部群消息】
+内部群摘要：
+{internal_part.get("internal_group_summary", "")}
+
+## 内部群原始消息（用于交叉验证客户要求是否有内部响应）
 {internal_context}
-
-【全部消息（用于交叉验证）】
-{all_context}
 """
 
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": "你是 B2B 销售情报分析助手，擅长从钉钉群聊中提炼客户动态、识别未响应风险、生成销售待办。"},
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0.3,
+    details_part = llm_json(
+        "你是 B2B 销售情报分析助手，擅长从钉钉群聊中提炼客户动态、识别未响应风险、生成销售待办。",
+        details_prompt,
         max_tokens=8000,
     )
 
-    result_text = resp.choices[0].message.content.strip()
-    if result_text.startswith("```json"):
-        result_text = result_text[7:]
-    if result_text.startswith("```"):
-        result_text = result_text[3:]
-    if result_text.endswith("```"):
-        result_text = result_text[:-3]
-    result_text = result_text.strip()
-
-    result = json.loads(result_text)
+    result = {
+        "account_name": args.account,
+        "date_range": date_range_str,
+        "summary": details_part.get("summary", ""),
+        "customer_group_summary": customer_part.get("customer_group_summary", ""),
+        "internal_group_summary": internal_part.get("internal_group_summary", ""),
+        "cross_reference": details_part.get("cross_reference", []),
+        "signals": details_part.get("signals", []),
+        "action_items": details_part.get("action_items", []),
+        "insights": details_part.get("insights", ""),
+    }
 
     out_json_path = DATA_DIR / f"{safe_account}_analysis.json"
     out_md_path = DATA_DIR / f"{safe_account}_analysis.md"

@@ -159,7 +159,7 @@ def main():
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            temperature=0.3,
+            temperature=1,
             max_tokens=max_tokens,
         )
         raw = resp.choices[0].message.content or ""

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { createHash } from "crypto";
-import fs from "fs";
+import fs, { readFileSync } from "fs";
+import { resolve, dirname, join } from "path";
 import { resolveUploadPath } from "../utils/fileStorage.ts";
 import { AgentSession, type OutgoingMessage } from "../agent/Session.ts";
 import { ConversationStore } from "../memory/ConversationStore.ts";
@@ -20,12 +21,16 @@ interface ClientMessage {
   message?: string;
   action?: "hello" | "stop" | "new_thread";
   title?: string;
+  thread_id?: string; // 显式目标线程（项目频道或私有线程）
+  project_name?: string; // hello 时按项目名 find-or-create 频道
   attachments?: AttachmentMeta[];
 }
 
 interface HistoryMessage {
   role: "user" | "assistant";
   content: string;
+  user_id?: string;
+  user_name?: string;
 }
 
 const activeSessions = new Map<string, AgentSession>();
@@ -33,11 +38,67 @@ const conversationStore = new ConversationStore();
 const usageStore = new UsageStore();
 const userStore = new UserStore();
 
+// 共享项目频道：按 thread 串行队列、进行中的频道会话、在线查看者
+const channelQueues = new Map<string, Promise<void>>();
+const channelSessions = new Map<string, AgentSession>();
+const channelViewers = new Map<string, Set<any>>();
+const socketMeta = new Map<any, { userId: string; viewingThreadId: string | null }>();
+
+const MENTION_BOT = /[@＠](销销|xiaoxiao)\s*/gi;
+
+// 在管项目名集合（与 index.ts loadProjectAccounts 同源）：
+// 频道 hello 只对在管项目自动创建，其他名字必须走 /api/create_channel（带成员与关联项目）
+function loadManagedProjectNames(): Set<string> {
+  const names = new Set<string>();
+  const baseDir = resolve(dirname(new URL(import.meta.url).pathname), "../../..", "data", "projects");
+  for (const file of ["feishu_accounts.json", "dingtalk_accounts.json", "wechat_accounts.json", "hybrid_accounts.json"]) {
+    try {
+      const config = JSON.parse(readFileSync(join(baseDir, file), "utf-8"));
+      for (const name of Object.keys(config.accounts || {})) names.add(name);
+    } catch {
+      // 配置文件缺失时跳过
+    }
+  }
+  return names;
+}
+
+function addViewer(threadId: string, socket: any, userId: string) {
+  removeViewer(socket);
+  let set = channelViewers.get(threadId);
+  if (!set) {
+    set = new Set();
+    channelViewers.set(threadId, set);
+  }
+  set.add(socket);
+  socketMeta.set(socket, { userId, viewingThreadId: threadId });
+}
+
+function removeViewer(socket: any) {
+  const meta = socketMeta.get(socket);
+  if (meta?.viewingThreadId) {
+    const set = channelViewers.get(meta.viewingThreadId);
+    if (set) {
+      set.delete(socket);
+      if (set.size === 0) channelViewers.delete(meta.viewingThreadId);
+    }
+  }
+  socketMeta.delete(socket);
+}
+
+function broadcastToChannel(threadId: string, msg: OutgoingMessage) {
+  const set = channelViewers.get(threadId);
+  if (!set) return;
+  const payload = JSON.stringify({ ...msg, thread_id: threadId });
+  for (const s of set) {
+    if (s.readyState === 1) s.send(payload);
+  }
+}
+
 const DEDUP_TTL_MS = 60_000;
 const dedupCache = new Map<string, number>();
 
-function dedupKey(userId: string, message: string): string {
-  return createHash("sha256").update(`${userId}:${message}`).digest("hex");
+function dedupKey(userId: string, threadId: string, message: string): string {
+  return createHash("sha256").update(`${userId}:${threadId}:${message}`).digest("hex");
 }
 
 function isDuplicate(key: string): boolean {
@@ -92,14 +153,84 @@ export async function wsChatRoutes(app: FastifyInstance) {
       }
 
       if (data.action === "stop") {
-        activeSessions.get(userId)?.abort();
-        send({ type: "status", message: "已停止生成" });
+        if (data.thread_id && channelSessions.has(data.thread_id)) {
+          channelSessions.get(data.thread_id)?.abort();
+          broadcastToChannel(data.thread_id, { type: "status", message: "已停止生成" });
+        } else {
+          activeSessions.get(userId)?.abort();
+          send({ type: "status", message: "已停止生成" });
+        }
         return;
       }
 
       if (data.action === "hello") {
         try {
-          const threadId = await conversationStore.getOrCreateActiveThread(userId);
+          // 项目频道：按项目名 find-or-create，或按 thread_id 直接打开
+          const projectName = data.project_name?.trim();
+          if (projectName || data.thread_id) {
+            let thread = data.thread_id
+              ? await conversationStore.getThreadById(data.thread_id)
+              : undefined;
+            if (projectName && !thread) {
+              thread = await conversationStore.getThreadByProjectName(projectName);
+              if (!thread) {
+                // 频道不存在：仅在管项目允许自动创建；自定义频道必须走 /api/create_channel
+                if (!loadManagedProjectNames().has(projectName)) {
+                  send({ type: "error", message: "频道不存在，请通过「项目频道 +」创建" });
+                  return;
+                }
+                const threadId = await conversationStore.getOrCreateProjectThread(projectName, userId);
+                thread = await conversationStore.getThreadById(threadId);
+              }
+            }
+            if (!thread) {
+              send({ type: "error", message: "线程不存在" });
+              return;
+            }
+            const isChannel = !!thread.project_name;
+            if (!isChannel && thread.user_id !== userId) {
+              send({ type: "error", message: "无权访问该线程" });
+              return;
+            }
+            if (isChannel && !(await conversationStore.canAccessChannel(thread, userId))) {
+              send({ type: "error", message: "你不在该频道成员中" });
+              return;
+            }
+            if (isChannel) {
+              addViewer(thread.thread_id, socket, userId);
+              const messages = await conversationStore.getThreadMessages(thread.thread_id, 50);
+              send({
+                type: "history",
+                thread_id: thread.thread_id,
+                project_name: thread.project_name ?? undefined,
+                hint: `已进入频道：${thread.project_name}`,
+                messages: messages.map((m) => ({
+                  role: m.role,
+                  content: m.content,
+                  user_id: m.user_id,
+                  user_name: m.user_name,
+                })),
+              } as OutgoingMessage);
+            } else {
+              removeViewer(socket);
+              const messages = await conversationStore.getRecentMessages(userId, thread.thread_id, 50);
+              send({
+                type: "history",
+                thread_id: thread.thread_id,
+                hint: messages.length > 0 ? "已恢复当前对话" : undefined,
+                messages: messages.map((m) => ({ role: m.role, content: m.content })),
+              } as OutgoingMessage);
+            }
+            return;
+          }
+
+          // 默认：私有活跃线程
+          removeViewer(socket);
+          const threadId = await conversationStore.getActiveThread(userId);
+          if (!threadId) {
+            send({ type: "history", thread_id: undefined, hint: undefined, messages: [] } as OutgoingMessage);
+            return;
+          }
           const messages = await conversationStore.getRecentMessages(userId, threadId, 50);
           const history: HistoryMessage[] = messages.map((m) => ({
             role: m.role,
@@ -143,7 +274,7 @@ export async function wsChatRoutes(app: FastifyInstance) {
       }
 
       const attachmentSummary = attachments.map((a) => `${a.name}(${a.mimeType})`).join("|");
-      const key = dedupKey(userId, `${message}::${attachmentSummary}`);
+      const key = dedupKey(userId, data.thread_id ?? "", `${message}::${attachmentSummary}`);
       if (isDuplicate(key)) {
         send({ type: "status", message: "消息正在处理中，请勿重复发送" });
         return;
@@ -171,9 +302,36 @@ export async function wsChatRoutes(app: FastifyInstance) {
         return;
       }
 
+      // 解析目标线程：显式 thread_id（频道或本人私有）或默认私有活跃线程
       let threadId: string;
+      let projectName: string | null = null;
+      let contextProject: string | null = null;
       try {
-        threadId = await conversationStore.getOrCreateActiveThread(userId);
+        if (data.thread_id) {
+          const thread = await conversationStore.getThreadById(data.thread_id);
+          if (!thread) {
+            send({ type: "error", message: "线程不存在" });
+            return;
+          }
+          if (thread.project_name) {
+            if (!(await conversationStore.canAccessChannel(thread, userId))) {
+              send({ type: "error", message: "你不在该频道成员中" });
+              return;
+            }
+            projectName = thread.project_name;
+            contextProject = thread.linked_project || thread.project_name;
+          } else if (thread.user_id !== userId) {
+            send({ type: "error", message: "无权访问该线程" });
+            return;
+          }
+          threadId = thread.thread_id;
+        } else {
+          threadId = await conversationStore.getOrCreateActiveThread(userId);
+          // 首次消息自动创建线程时通知前端，避免刷新后重复创建
+          if (!data.thread_id) {
+            send({ type: "thread_created", thread_id: threadId } as OutgoingMessage);
+          }
+        }
       } catch (err) {
         console.error("[ws] 获取线程失败:", err);
         send({ type: "error", message: "无法创建对话线程" });
@@ -194,7 +352,88 @@ export async function wsChatRoutes(app: FastifyInstance) {
         return a;
       });
 
-      const session = new AgentSession(userId, "", threadId, conversationStore, orgId, usageStore);
+      // ============ 项目频道路径 ============
+      if (projectName) {
+        const sender = await userStore.getUser(userId).catch(() => undefined);
+        const senderName = sender?.name || userId;
+
+        // 未 @销销：纯人-人消息，只持久化 + 广播
+        if (!MENTION_BOT.test(message)) {
+          MENTION_BOT.lastIndex = 0;
+          try {
+            await conversationStore.addMessageToProjectThread(userId, threadId, "user", message);
+            broadcastToChannel(threadId, {
+              type: "channel_message",
+              role: "user",
+              user_id: userId,
+              user_name: senderName,
+              content: message,
+            } as OutgoingMessage);
+          } catch (err) {
+            console.error("[ws] 频道消息持久化失败:", err);
+            send({ type: "error", message: "消息发送失败" });
+          }
+          return;
+        }
+        MENTION_BOT.lastIndex = 0;
+        const query = message.replace(MENTION_BOT, "").trim();
+        if (!query) {
+          send({ type: "status", message: "@销销 后请跟上具体问题" });
+          return;
+        }
+
+        // 先立即持久化原文（保留 @销销）并广播，入队等待期间其他成员也能看到
+        try {
+          await conversationStore.addMessageToProjectThread(userId, threadId, "user", message);
+          broadcastToChannel(threadId, {
+            type: "channel_message",
+            role: "user",
+            user_id: userId,
+            user_name: senderName,
+            content: message,
+          } as OutgoingMessage);
+        } catch (err) {
+          console.error("[ws] 频道消息持久化失败:", err);
+          send({ type: "error", message: "消息发送失败" });
+          return;
+        }
+
+        // @销销：进入按 thread 串行队列，逐条执行
+        const prev = channelQueues.get(threadId) ?? Promise.resolve();
+        const run = prev.then(async () => {
+          const llmConfig = await userStore.getUserLlmConfig(userId);
+          const session = new AgentSession(
+            userId,
+            senderName,
+            threadId,
+            conversationStore,
+            orgId,
+            usageStore,
+            { projectName, contextProject: contextProject ?? projectName, skipUserPersist: true, llmConfig },
+          );
+          channelSessions.set(threadId, session);
+          activeSessions.set(userId, session);
+          const bcast = (msg: OutgoingMessage) => broadcastToChannel(threadId, msg);
+          try {
+            bcast({ type: "status", message: "销销正在思考…" });
+            const result = await session.run(query, attachmentsWithData, bcast);
+            bcast(result);
+          } finally {
+            channelSessions.delete(threadId);
+            if (activeSessions.get(userId) === session) activeSessions.delete(userId);
+          }
+        });
+        channelQueues.set(threadId, run.catch(() => {}));
+        await run.catch((err) => {
+          console.error("[ws] 频道会话执行失败:", err);
+          broadcastToChannel(threadId, { type: "error", message: "频道回复失败，请重试" });
+        });
+        return;
+      }
+
+      // ============ 私有线程路径（原逻辑） ============
+      const llmConfig = await userStore.getUserLlmConfig(userId);
+      const session = new AgentSession(userId, "", threadId, conversationStore, orgId, usageStore, { llmConfig });
       activeSessions.set(userId, session);
 
       send({ type: "status", message: "销销正在思考…" });
@@ -204,7 +443,7 @@ export async function wsChatRoutes(app: FastifyInstance) {
     });
 
     socket.on("close", () => {
-      // 清理由后续连接处理
+      removeViewer(socket);
     });
   });
 }

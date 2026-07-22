@@ -125,6 +125,7 @@ export async function adminRoutes(app: FastifyInstance) {
         name: body.name.trim(),
         role: body.role?.trim() || "成员",
         entityType: body.entityType?.trim() || "user",
+        isAdmin: body.isAdmin === true,
         orgId: body.orgId?.trim() || "org_default",
         teamId: body.teamId?.trim(),
         wechatUserId: body.wechatUserId?.trim(),
@@ -151,10 +152,12 @@ export async function adminRoutes(app: FastifyInstance) {
       if (body.name !== undefined) updates.name = body.name.trim();
       if (body.role !== undefined) updates.role = body.role.trim();
       if (body.entityType !== undefined) updates.entityType = body.entityType.trim();
+      if (body.isAdmin !== undefined) updates.isAdmin = body.isAdmin === true;
       if (body.orgId !== undefined) updates.orgId = body.orgId.trim();
       if (body.teamId !== undefined) updates.teamId = body.teamId.trim() || undefined;
       if (body.wechatUserId !== undefined) updates.wechatUserId = body.wechatUserId.trim() || undefined;
       if (body.status !== undefined) updates.status = body.status.trim();
+      if (body.llmConfig !== undefined) updates.llmConfig = body.llmConfig as UserRecord["llmConfig"];
 
       const updated = await userStore.updateUser(user_id, updates);
       if (!updated) {
